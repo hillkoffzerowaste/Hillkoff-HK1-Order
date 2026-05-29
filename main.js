@@ -34,6 +34,7 @@ boot();
 
 function boot() {
   bindViews();
+  bindSectionTabs();
   bindHost();
   bindCashier();
   renderAll();
@@ -46,6 +47,28 @@ function bindViews() {
       state.view = button.dataset.view;
       $$(".mode-btn").forEach((item) => item.classList.toggle("active", item === button));
       $$(".view").forEach((view) => view.classList.toggle("active", view.id === `${state.view}-view`));
+    });
+  });
+}
+
+function bindSectionTabs() {
+  $$(".queue-tabs .section-tab").forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = button.dataset.queuePanel;
+      $$(".queue-tabs .section-tab").forEach((item) => item.classList.toggle("active", item === button));
+      $$("[data-queue-section]").forEach((section) => {
+        section.classList.toggle("active", section.dataset.queueSection === target);
+      });
+    });
+  });
+
+  $$(".cashier-tabs .section-tab").forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = button.dataset.cashierPanel;
+      $$(".cashier-tabs .section-tab").forEach((item) => item.classList.toggle("active", item === button));
+      $$("[data-cashier-section]").forEach((section) => {
+        section.classList.toggle("active", section.dataset.cashierSection === target);
+      });
     });
   });
 }

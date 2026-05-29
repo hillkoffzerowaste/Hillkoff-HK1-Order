@@ -72,16 +72,21 @@
                 <strong id="count-done">0</strong>
               </div>
             </div>
+            <div class="section-tabs queue-tabs" aria-label="เลือกสถานะคิว">
+              <button class="section-tab active" data-queue-panel="waiting">ออเดอร์ใหม่</button>
+              <button class="section-tab" data-queue-panel="grinding">กำลังบด</button>
+              <button class="section-tab" data-queue-panel="done">เสร็จแล้ว</button>
+            </div>
             <div class="kanban">
-              <section class="glass column">
+              <section class="glass column active" data-queue-section="waiting">
                 <h2>ออเดอร์เข้าใหม่</h2>
                 <div id="waiting-list" class="order-list"></div>
               </section>
-              <section class="glass column">
+              <section class="glass column" data-queue-section="grinding">
                 <h2>กำลังบด/แพ็ค</h2>
                 <div id="grinding-list" class="order-list"></div>
               </section>
-              <section class="glass column">
+              <section class="glass column" data-queue-section="done">
                 <h2>ปิดออเดอร์แล้ว</h2>
                 <div id="done-list" class="order-list"></div>
               </section>
@@ -92,7 +97,12 @@
 
       <section id="cashier-view" class="view">
         <div class="cashier-layout">
-          <aside class="glass panel">
+          <div class="section-tabs cashier-tabs" aria-label="เลือกงานแคชเชียร์">
+            <button class="section-tab active" data-cashier-panel="connect">เชื่อมต่อ</button>
+            <button class="section-tab" data-cashier-panel="order">รับออเดอร์</button>
+            <button class="section-tab" data-cashier-panel="queue">ดูคิว</button>
+          </div>
+          <aside class="glass panel cashier-tab-target active" data-cashier-section="connect">
             <div class="panel-title">
               <span>เครื่องลูก</span>
               <strong id="cashier-status">ยังไม่เชื่อมต่อ</strong>
@@ -116,7 +126,7 @@
             </div>
           </aside>
 
-          <section class="glass order-form">
+          <section class="glass order-form cashier-tab-target" data-cashier-section="order">
             <div class="form-head">
               <div>
                 <p>รับออเดอร์</p>
@@ -173,7 +183,7 @@
             <button id="send-order" class="btn primary">ส่งออเดอร์</button>
           </section>
 
-          <section class="glass queue-preview">
+          <section class="glass queue-preview cashier-tab-target" data-cashier-section="queue">
             <h2>คิวจากเครื่องแม่</h2>
             <div id="cashier-queue-list" class="mini-list"></div>
           </section>
