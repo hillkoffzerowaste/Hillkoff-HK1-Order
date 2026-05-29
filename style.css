@@ -1,0 +1,505 @@
+:root {
+  color-scheme: light;
+  --coffee-900: #2c1b14;
+  --coffee-800: #43291e;
+  --coffee-700: #65402e;
+  --coffee-500: #9b6a48;
+  --cream: #fff7e8;
+  --foam: rgba(255, 250, 239, 0.72);
+  --foam-strong: rgba(255, 250, 239, 0.88);
+  --line: rgba(88, 54, 35, 0.2);
+  --green: #247a53;
+  --amber: #b46b12;
+  --blue: #396f8c;
+  --shadow: 0 22px 60px rgba(54, 31, 18, 0.18);
+  font-family: "Noto Sans Thai", Inter, system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--coffee-900);
+  background:
+    radial-gradient(circle at top left, rgba(255, 235, 199, 0.9), transparent 34rem),
+    linear-gradient(135deg, #edd4ad 0%, #b9855d 45%, #6e4935 100%);
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.bg-grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.2;
+  background-image:
+    linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px),
+    linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem clamp(1rem, 3vw, 2rem);
+  backdrop-filter: blur(18px);
+  background: rgba(63, 38, 26, 0.55);
+  border-bottom: 1px solid rgba(255, 248, 232, 0.25);
+  color: var(--cream);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.brand-mark {
+  display: grid;
+  width: 3rem;
+  height: 3rem;
+  place-items: center;
+  border-radius: 0.75rem;
+  background: rgba(255, 247, 232, 0.16);
+  border: 1px solid rgba(255, 247, 232, 0.35);
+  font-weight: 800;
+}
+
+.brand p,
+.brand h1 {
+  margin: 0;
+}
+
+.brand p {
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.brand h1 {
+  font-size: clamp(1rem, 2.5vw, 1.35rem);
+}
+
+.mode-switch {
+  display: flex;
+  padding: 0.3rem;
+  gap: 0.3rem;
+  border-radius: 999px;
+  background: rgba(255, 247, 232, 0.12);
+}
+
+.mode-btn,
+.btn,
+.icon-btn,
+.order-action {
+  cursor: pointer;
+  border: 0;
+  transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.mode-btn {
+  min-height: 2.5rem;
+  padding: 0 1rem;
+  border-radius: 999px;
+  color: var(--cream);
+  background: transparent;
+  font-weight: 700;
+}
+
+.mode-btn.active {
+  color: var(--coffee-900);
+  background: var(--cream);
+}
+
+.shell {
+  position: relative;
+  width: min(1480px, 100%);
+  margin: 0 auto;
+  padding: clamp(1rem, 2vw, 2rem);
+}
+
+.view {
+  display: none;
+}
+
+.view.active {
+  display: block;
+}
+
+.glass {
+  border: 1px solid rgba(255, 250, 239, 0.42);
+  background: var(--foam);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(20px);
+}
+
+.host-layout,
+.cashier-layout {
+  display: grid;
+  grid-template-columns: minmax(17rem, 22rem) 1fr;
+  gap: 1rem;
+}
+
+.cashier-layout {
+  grid-template-columns: minmax(17rem, 21rem) minmax(24rem, 1fr) minmax(18rem, 24rem);
+}
+
+.panel,
+.order-form,
+.queue-preview,
+.column,
+.metric {
+  border-radius: 1.25rem;
+}
+
+.panel {
+  align-self: start;
+  padding: 1rem;
+}
+
+.panel-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.panel-title span,
+.metric span,
+.status-grid span,
+.muted,
+.brand p,
+.form-head p {
+  color: rgba(44, 27, 20, 0.64);
+}
+
+.qr-wrap {
+  display: grid;
+  place-items: center;
+  padding: 0.75rem;
+  margin: 0 0 1rem;
+  border-radius: 1rem;
+  background: rgba(255, 248, 238, 0.64);
+}
+
+.input-label,
+label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 700;
+}
+
+input,
+select {
+  width: 100%;
+  min-height: 2.8rem;
+  padding: 0 0.85rem;
+  color: var(--coffee-900);
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  outline: none;
+  background: rgba(255, 253, 248, 0.78);
+}
+
+input:focus,
+select:focus {
+  border-color: rgba(101, 64, 46, 0.65);
+  box-shadow: 0 0 0 4px rgba(155, 106, 72, 0.15);
+}
+
+.copy-row,
+.connect-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.btn,
+.icon-btn,
+.order-action {
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  border-radius: 0.85rem;
+  color: #fffaf0;
+  background: linear-gradient(135deg, var(--coffee-700), var(--coffee-900));
+  font-weight: 800;
+}
+
+.btn.secondary,
+.icon-btn {
+  color: var(--coffee-900);
+  background: rgba(255, 247, 232, 0.72);
+  border: 1px solid var(--line);
+}
+
+.btn.primary {
+  min-height: 3.25rem;
+  background: linear-gradient(135deg, #8a542d, #2f1c13);
+}
+
+.btn:hover,
+.icon-btn:hover,
+.order-action:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px rgba(65, 38, 23, 0.2);
+}
+
+.connect-panel .btn,
+.panel .btn {
+  width: 100%;
+  margin-top: 0.65rem;
+}
+
+.status-grid,
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.7rem;
+}
+
+.status-grid div,
+.metric {
+  padding: 0.85rem;
+  border-radius: 1rem;
+  background: rgba(255, 250, 239, 0.5);
+}
+
+.status-grid strong,
+.metric strong {
+  display: block;
+  font-size: 1.45rem;
+}
+
+.queue-area {
+  display: grid;
+  gap: 1rem;
+}
+
+.summary-cards {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.kanban {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.column {
+  min-height: 33rem;
+  padding: 1rem;
+}
+
+.column h2,
+.queue-preview h2,
+.form-head h2 {
+  margin: 0 0 1rem;
+  font-size: 1.15rem;
+}
+
+.order-list,
+.mini-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.order-card,
+.mini-item,
+.detected-card {
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: rgba(255, 253, 247, 0.68);
+}
+
+.order-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.order-top strong {
+  font-size: 1.25rem;
+}
+
+.order-top span {
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  color: #fffaf0;
+  background: var(--amber);
+  font-weight: 800;
+}
+
+.order-card h3,
+.order-card p,
+.form-head p {
+  margin: 0.35rem 0;
+}
+
+.order-actions {
+  margin-top: 0.75rem;
+}
+
+.order-action {
+  width: 100%;
+}
+
+.order-form,
+.queue-preview {
+  padding: 1.15rem;
+}
+
+.form-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.detected-card {
+  display: grid;
+  gap: 0.2rem;
+  margin: 1rem 0;
+}
+
+.detected-card span {
+  color: rgba(44, 27, 20, 0.62);
+}
+
+.mini-item {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.mini-item span {
+  color: rgba(44, 27, 20, 0.72);
+}
+
+.empty {
+  padding: 1rem;
+  border: 1px dashed rgba(88, 54, 35, 0.28);
+  border-radius: 1rem;
+  text-align: center;
+  color: rgba(44, 27, 20, 0.58);
+}
+
+.dialog {
+  width: min(38rem, calc(100vw - 2rem));
+  padding: 1rem;
+  border-radius: 1.25rem;
+  color: var(--coffee-900);
+}
+
+.dialog.small {
+  width: min(30rem, calc(100vw - 2rem));
+}
+
+.dialog::backdrop {
+  background: rgba(28, 17, 11, 0.55);
+  backdrop-filter: blur(6px);
+}
+
+.dialog-head,
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.dialog h2 {
+  margin: 0 0 0.75rem;
+}
+
+.dialog form {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.reader {
+  overflow: hidden;
+  min-height: 20rem;
+  border-radius: 1rem;
+  border: 1px solid var(--line);
+  background: #1f1815;
+}
+
+.toast {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 30;
+  max-width: min(24rem, calc(100vw - 2rem));
+  padding: 0.85rem 1rem;
+  border-radius: 1rem;
+  color: #fffaf0;
+  background: rgba(44, 27, 20, 0.92);
+  opacity: 0;
+  transform: translateY(1rem);
+  pointer-events: none;
+  transition: 180ms ease;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (max-width: 1120px) {
+  .host-layout,
+  .cashier-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .kanban {
+    grid-template-columns: 1fr;
+  }
+
+  .column {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 680px) {
+  .topbar,
+  .form-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mode-switch,
+  .summary-cards,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mode-switch {
+    display: grid;
+    border-radius: 1rem;
+  }
+
+  .status-grid,
+  .summary-cards {
+    grid-template-columns: 1fr;
+  }
+}

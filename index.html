@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#4b2f22" />
+    <title>Hillkoff HK1 Order</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="bg-grain"></div>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">HK1</div>
+        <div>
+          <p>Hillkoff Zero Waste</p>
+          <h1>ระบบคิวบดกาแฟหน้าร้าน</h1>
+        </div>
+      </div>
+      <nav class="mode-switch" aria-label="เลือกโหมดใช้งาน">
+        <button class="mode-btn active" data-view="host">ห้องแพ็ค/บด</button>
+        <button class="mode-btn" data-view="cashier">แคชเชียร์</button>
+      </nav>
+    </header>
+
+    <main class="shell">
+      <section id="host-view" class="view active">
+        <div class="host-layout">
+          <aside class="glass panel connect-panel">
+            <div class="panel-title">
+              <span>เครื่องแม่</span>
+              <strong id="host-status">กำลังสร้าง Host...</strong>
+            </div>
+            <div class="qr-wrap">
+              <canvas id="host-qr" width="220" height="220" aria-label="QR Code สำหรับเชื่อมต่อ"></canvas>
+            </div>
+            <label class="input-label" for="host-peer-id">Host ID</label>
+            <div class="copy-row">
+              <input id="host-peer-id" readonly value="-" />
+              <button id="copy-host-id" class="icon-btn" title="คัดลอก ID">คัดลอก</button>
+            </div>
+            <div class="status-grid">
+              <div>
+                <span>เครื่องลูก</span>
+                <strong id="peer-count">0</strong>
+              </div>
+              <div>
+                <span>เวลารอรวม</span>
+                <strong id="host-wait">0 นาที</strong>
+              </div>
+            </div>
+            <button id="host-unlock-audio" class="btn secondary">เปิดระบบเสียง</button>
+            <button id="host-scan-done" class="btn">สแกนถุงที่บดเสร็จ</button>
+          </aside>
+
+          <section class="queue-area">
+            <div class="summary-cards">
+              <div class="glass metric">
+                <span>รอคิว</span>
+                <strong id="count-waiting">0</strong>
+              </div>
+              <div class="glass metric">
+                <span>กำลังบด</span>
+                <strong id="count-grinding">0</strong>
+              </div>
+              <div class="glass metric">
+                <span>เสร็จแล้ว</span>
+                <strong id="count-done">0</strong>
+              </div>
+            </div>
+            <div class="kanban">
+              <section class="glass column">
+                <h2>ออเดอร์เข้าใหม่</h2>
+                <div id="waiting-list" class="order-list"></div>
+              </section>
+              <section class="glass column">
+                <h2>กำลังบด/แพ็ค</h2>
+                <div id="grinding-list" class="order-list"></div>
+              </section>
+              <section class="glass column">
+                <h2>ปิดออเดอร์แล้ว</h2>
+                <div id="done-list" class="order-list"></div>
+              </section>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="cashier-view" class="view">
+        <div class="cashier-layout">
+          <aside class="glass panel">
+            <div class="panel-title">
+              <span>เครื่องลูก</span>
+              <strong id="cashier-status">ยังไม่เชื่อมต่อ</strong>
+            </div>
+            <button id="cashier-unlock-audio" class="btn secondary">เปิดระบบเสียง</button>
+            <button id="scan-host-qr" class="btn">สแกน QR เครื่องแม่</button>
+            <label class="input-label" for="manual-host-id">หรือกรอก Host ID</label>
+            <div class="connect-row">
+              <input id="manual-host-id" placeholder="เช่น hk1-ABCD12" autocomplete="off" />
+              <button id="connect-host" class="icon-btn">เชื่อมต่อ</button>
+            </div>
+            <div class="status-grid">
+              <div>
+                <span>สินค้าที่รู้จัก</span>
+                <strong id="product-count">0</strong>
+              </div>
+              <div>
+                <span>คิวคงค้าง</span>
+                <strong id="cashier-wait">0 นาที</strong>
+              </div>
+            </div>
+          </aside>
+
+          <section class="glass order-form">
+            <div class="form-head">
+              <div>
+                <p>รับออเดอร์</p>
+                <h2>สแกนถุงกาแฟและส่งเข้าห้องบด</h2>
+              </div>
+              <button id="scan-product" class="btn secondary">สแกนบาร์โค้ด</button>
+            </div>
+
+            <div class="form-grid">
+              <label>
+                บาร์โค้ด
+                <input id="barcode" placeholder="ยิงบาร์โค้ดหรือพิมพ์เอง" autocomplete="off" />
+              </label>
+              <label>
+                ชื่อสินค้า
+                <input id="product-name" placeholder="เลือก/สแกนสินค้า" />
+              </label>
+              <label>
+                ขนาดถุง
+                <select id="bag-size">
+                  <option value="250">250g</option>
+                  <option value="500" selected>500g</option>
+                  <option value="1000">1000g</option>
+                </select>
+              </label>
+              <label>
+                จำนวนถุง
+                <input id="qty" type="number" min="1" value="1" />
+              </label>
+              <label>
+                เบอร์บด
+                <select id="grind">
+                  <option>บดละเอียด</option>
+                  <option>บดปานกลาง</option>
+                  <option>ดริป</option>
+                  <option>เอสเพรสโซ่</option>
+                  <option>เฟรนช์เพรส</option>
+                  <option>โมก้าพอต</option>
+                  <option>Cold Brew</option>
+                  <option>ไม่บด</option>
+                </select>
+              </label>
+              <label>
+                ชื่อลูกค้า/เลขบิล
+                <input id="customer" placeholder="ไม่บังคับ" />
+              </label>
+            </div>
+
+            <div class="detected-card" id="detected-card">
+              <span>ยังไม่ได้เลือกสินค้า</span>
+              <strong>สแกนบาร์โค้ดเพื่อค้นหาอัตโนมัติ</strong>
+            </div>
+
+            <button id="send-order" class="btn primary">ส่งออเดอร์</button>
+          </section>
+
+          <section class="glass queue-preview">
+            <h2>คิวจากเครื่องแม่</h2>
+            <div id="cashier-queue-list" class="mini-list"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="scanner-dialog" class="glass dialog">
+      <div class="dialog-head">
+        <h2 id="scanner-title">สแกน</h2>
+        <button id="close-scanner" class="icon-btn">ปิด</button>
+      </div>
+      <div id="reader" class="reader"></div>
+      <p id="scanner-help">อนุญาตกล้อง แล้ววาง QR/บาร์โค้ดไว้กลางกรอบ</p>
+    </dialog>
+
+    <dialog id="product-dialog" class="glass dialog small">
+      <form method="dialog" id="product-dialog-form">
+        <h2>บันทึกสินค้าบาร์โค้ดใหม่</h2>
+        <p id="off-source">ค้นข้อมูลจาก Open Food Facts แล้ว แก้ไขก่อนบันทึกได้</p>
+        <label>
+          บาร์โค้ด
+          <input id="new-product-barcode" required />
+        </label>
+        <label>
+          ชื่อสินค้า
+          <input id="new-product-name" required />
+        </label>
+        <label>
+          ขนาด
+          <select id="new-product-size">
+            <option value="250">250g</option>
+            <option value="500">500g</option>
+            <option value="1000">1000g</option>
+          </select>
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" class="btn secondary">ยกเลิก</button>
+          <button id="save-new-product" value="default" class="btn primary">บันทึกสินค้า</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status"></div>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
