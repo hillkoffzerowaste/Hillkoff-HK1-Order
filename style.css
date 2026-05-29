@@ -384,7 +384,8 @@ select:focus {
 }
 
 .section-tabs {
-  display: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.35rem;
   padding: 0.35rem;
   border: 1px solid rgba(255, 229, 188, 0.2);
@@ -417,17 +418,31 @@ select:focus {
 
 .kanban {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: clamp(0.75rem, 1.3vw, 1rem);
 }
 
 .column {
-  min-height: calc(100dvh - 13.5rem);
+  min-height: calc(100dvh - 18rem);
   padding: 1rem;
   display: flex;
   flex-direction: column;
   position: relative;
   overflow: hidden;
+}
+
+.kanban .column,
+.cashier-tab-target {
+  display: none;
+}
+
+.kanban .column.active {
+  display: flex;
+}
+
+.cashier-tab-target.active {
+  display: block;
+  grid-column: 1 / -1;
 }
 
 .column:nth-child(1) {
