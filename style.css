@@ -638,6 +638,18 @@ select:focus {
   min-width: min(18rem, 100%);
 }
 
+.report-date-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+}
+
+.report-current-date {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
 .report-table-wrap {
   overflow: auto;
   border: 1px solid var(--line-soft);
@@ -862,6 +874,7 @@ select:focus {
 
   .copy-row,
   .connect-row,
+  .report-date-control,
   .dialog-head,
   .dialog-actions,
   .report-actions {

@@ -96,8 +96,13 @@ function bindCashier() {
 }
 
 function bindReport() {
-  $("#report-date").value = todayKey();
-  $("#report-date").addEventListener("change", renderReport);
+  const dateInput = $("#report-date");
+  dateInput.value = todayKey();
+  dateInput.addEventListener("change", renderReport);
+  $("#report-today").addEventListener("click", () => {
+    dateInput.value = todayKey();
+    renderReport();
+  });
   $("#copy-report").addEventListener("click", copyDailyReport);
   $("#export-report").addEventListener("click", exportDailyReport);
 }
@@ -388,6 +393,7 @@ function renderCashier() {
 
 function renderReport() {
   const report = buildDailyReport($("#report-date")?.value || todayKey());
+  renderReportDateLabel(report.date);
   $("#report-orders").textContent = report.orders.length;
   $("#report-bags").textContent = report.totalBags;
   $("#report-minutes").textContent = `${report.totalMinutes} นาที`;
@@ -487,6 +493,22 @@ function formatDailyReportText(report) {
     ),
   ];
   return lines.join("\n");
+}
+
+function renderReportDateLabel(dateKey) {
+  const label = $("#report-current-date");
+  if (!label) return;
+  label.textContent = `วันที่เลือก: ${formatDateLong(dateKey)}`;
+}
+
+function formatDateLong(dateKey) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString("th-TH", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 }
 
 function orderCard(order) {
