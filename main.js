@@ -37,6 +37,7 @@ function boot() {
   bindSectionTabs();
   bindHost();
   bindCashier();
+  bindReport();
   renderAll();
   startHost();
 }
@@ -47,6 +48,7 @@ function bindViews() {
       state.view = button.dataset.view;
       $$(".mode-btn").forEach((item) => item.classList.toggle("active", item === button));
       $$(".view").forEach((view) => view.classList.toggle("active", view.id === `${state.view}-view`));
+      if (state.view === "report") renderReport();
     });
   });
 }
@@ -91,6 +93,13 @@ function bindCashier() {
   $("#send-order").addEventListener("click", sendOrder);
   $("#close-scanner").addEventListener("click", closeScanner);
   $("#save-new-product").addEventListener("click", saveNewProduct);
+}
+
+function bindReport() {
+  $("#report-date").value = todayKey();
+  $("#report-date").addEventListener("change", renderReport);
+  $("#copy-report").addEventListener("click", copyDailyReport);
+  $("#export-report").addEventListener("click", exportDailyReport);
 }
 
 function startHost() {
@@ -342,6 +351,7 @@ async function handleScan(text) {
 function renderAll() {
   renderHost();
   renderCashier();
+  renderReport();
 }
 
 function renderHost() {
@@ -374,6 +384,109 @@ function renderCashier() {
     activeOrders
       .map((order) => `<div class="mini-item"><strong>คิว ${order.queue}</strong><span>${order.name} - ${statusLabel(order.status)}</span></div>`)
       .join("") || empty("ยังไม่มีคิวคงค้าง");
+}
+
+function renderReport() {
+  const report = buildDailyReport($("#report-date")?.value || todayKey());
+  $("#report-orders").textContent = report.orders.length;
+  $("#report-bags").textContent = report.totalBags;
+  $("#report-minutes").textContent = `${report.totalMinutes} นาที`;
+  $("#report-body").innerHTML =
+    report.orders.map((order) => `
+      <tr>
+        <td>${formatTime(order.createdAt)}</td>
+        <td>${escapeHtml(order.queue)}</td>
+        <td>${escapeHtml(order.name)}</td>
+        <td>${order.size}g</td>
+        <td>${order.qty}</td>
+        <td>${escapeHtml(order.grind)}</td>
+        <td>${statusLabel(order.status)}</td>
+        <td>${escapeHtml(order.customer || "-")}</td>
+      </tr>
+    `).join("") || `<tr><td colspan="8">ยังไม่มีออเดอร์ในวันที่เลือก</td></tr>`;
+}
+
+async function copyDailyReport() {
+  const report = buildDailyReport($("#report-date").value || todayKey());
+  await navigator.clipboard?.writeText(formatDailyReportText(report));
+  toast("คัดลอกรายงานแล้ว");
+}
+
+function exportDailyReport() {
+  const report = buildDailyReport($("#report-date").value || todayKey());
+  const html = buildExcelHtml(report);
+  const blob = new Blob(["\ufeff", html], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `HK1-report-${report.date}.xls`;
+  link.click();
+  URL.revokeObjectURL(url);
+  toast("ดาวน์โหลด Excel แล้ว");
+}
+
+function buildExcelHtml(report) {
+  const rows = report.orders.map((order) => `
+    <tr>
+      <td>${report.date}</td>
+      <td>${formatTime(order.createdAt)}</td>
+      <td>${escapeHtml(order.queue)}</td>
+      <td>${escapeHtml(order.barcode)}</td>
+      <td>${escapeHtml(order.name)}</td>
+      <td>${order.size}</td>
+      <td>${order.qty}</td>
+      <td>${escapeHtml(order.grind)}</td>
+      <td>${statusLabel(order.status)}</td>
+      <td>${escapeHtml(order.customer || "")}</td>
+      <td>${(WAIT_MINUTES[order.size] || 2) * Number(order.qty || 1)}</td>
+    </tr>
+  `).join("");
+  return `
+    <html>
+      <head><meta charset="UTF-8" /></head>
+      <body>
+        <h2>รายงานออเดอร์บดกาแฟประจำวันที่ ${report.date}</h2>
+        <table border="1">
+          <tr><th>รายการ</th><th>ค่า</th></tr>
+          <tr><td>จำนวนออเดอร์</td><td>${report.orders.length}</td></tr>
+          <tr><td>จำนวนถุงรวม</td><td>${report.totalBags}</td></tr>
+          <tr><td>เวลาบดรวม (นาที)</td><td>${report.totalMinutes}</td></tr>
+        </table>
+        <br />
+        <table border="1">
+          <tr>
+            <th>วันที่</th><th>เวลา</th><th>คิว</th><th>บาร์โค้ด</th><th>สินค้า</th>
+            <th>ขนาดกรัม</th><th>จำนวนถุง</th><th>เบอร์บด</th><th>สถานะ</th>
+            <th>ลูกค้า/เลขบิล</th><th>เวลาบดนาที</th>
+          </tr>
+          ${rows || '<tr><td colspan="11">ไม่มีข้อมูล</td></tr>'}
+        </table>
+      </body>
+    </html>
+  `;
+}
+
+function buildDailyReport(dateKey) {
+  const orders = state.store.orders
+    .filter((order) => dateFromTimestamp(order.createdAt) === dateKey)
+    .sort((a, b) => a.createdAt - b.createdAt);
+  const totalBags = orders.reduce((sum, order) => sum + Number(order.qty || 0), 0);
+  const totalMinutes = orders.reduce((sum, order) => sum + (WAIT_MINUTES[order.size] || 2) * Number(order.qty || 1), 0);
+  return { date: dateKey, orders, totalBags, totalMinutes };
+}
+
+function formatDailyReportText(report) {
+  const lines = [
+    `รายงานออเดอร์บดกาแฟประจำวันที่ ${report.date}`,
+    `จำนวนออเดอร์: ${report.orders.length}`,
+    `จำนวนถุงรวม: ${report.totalBags}`,
+    `เวลาบดรวม: ${report.totalMinutes} นาที`,
+    "",
+    ...report.orders.map((order) =>
+      `${formatTime(order.createdAt)} | คิว ${order.queue} | ${order.name} | ${order.size}g x ${order.qty} | ${order.grind} | ${statusLabel(order.status)}`
+    ),
+  ];
+  return lines.join("\n");
 }
 
 function orderCard(order) {
@@ -415,9 +528,21 @@ function totalWait() {
 }
 
 function nextQueue() {
-  const today = new Date().toLocaleDateString("sv-SE");
-  const todays = state.store.orders.filter((order) => new Date(order.createdAt).toLocaleDateString("sv-SE") === today);
+  const today = todayKey();
+  const todays = state.store.orders.filter((order) => dateFromTimestamp(order.createdAt) === today);
   return String(todays.length + 1).padStart(3, "0");
+}
+
+function todayKey() {
+  return dateFromTimestamp(Date.now());
+}
+
+function dateFromTimestamp(timestamp) {
+  return new Date(timestamp).toLocaleDateString("sv-SE");
+}
+
+function formatTime(timestamp) {
+  return new Date(timestamp).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
 }
 
 function statusLabel(status) {

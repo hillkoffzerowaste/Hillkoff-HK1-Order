@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="theme-color" content="#4b2f22" />
+    <meta name="theme-color" content="#f4f7fb" />
     <title>Hillkoff HK1 Order</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -24,6 +24,7 @@
       <nav class="mode-switch" aria-label="เลือกโหมดใช้งาน">
         <button class="mode-btn active" data-view="host">ห้องแพ็ค/บด</button>
         <button class="mode-btn" data-view="cashier">แคชเชียร์</button>
+        <button class="mode-btn" data-view="report">รายงาน</button>
       </nav>
     </header>
 
@@ -186,6 +187,61 @@
           <section class="glass queue-preview cashier-tab-target" data-cashier-section="queue">
             <h2>คิวจากเครื่องแม่</h2>
             <div id="cashier-queue-list" class="mini-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="report-view" class="view">
+        <div class="report-layout">
+          <section class="glass report-panel">
+            <div class="form-head">
+              <div>
+                <p>Daily Grinding Report</p>
+                <h2>รายงานออเดอร์บดกาแฟประจำวัน</h2>
+              </div>
+              <label class="report-date">
+                เลือกวันที่
+                <input id="report-date" type="date" />
+              </label>
+            </div>
+
+            <div class="summary-cards report-summary">
+              <div class="glass metric">
+                <span>จำนวนออเดอร์</span>
+                <strong id="report-orders">0</strong>
+              </div>
+              <div class="glass metric">
+                <span>จำนวนถุงรวม</span>
+                <strong id="report-bags">0</strong>
+              </div>
+              <div class="glass metric">
+                <span>เวลาบดรวม</span>
+                <strong id="report-minutes">0 นาที</strong>
+              </div>
+            </div>
+
+            <div class="report-actions">
+              <button id="copy-report" class="btn secondary">คัดลอกรายงาน</button>
+              <button id="export-report" class="btn primary">ส่งออก Excel</button>
+            </div>
+
+            <div class="report-table-wrap">
+              <table class="report-table">
+                <thead>
+                  <tr>
+                    <th>เวลา</th>
+                    <th>คิว</th>
+                    <th>สินค้า</th>
+                    <th>ขนาด</th>
+                    <th>ถุง</th>
+                    <th>เบอร์บด</th>
+                    <th>สถานะ</th>
+                    <th>ลูกค้า/บิล</th>
+                  </tr>
+                </thead>
+                <tbody id="report-body"></tbody>
+              </table>
+            </div>
           </section>
         </div>
       </section>
