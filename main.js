@@ -8,9 +8,9 @@ const WAIT_MINUTES = { 250: 1, 500: 2, 1000: 4 };
 
 const defaultStore = {
   products: [
-    { barcode: "8850124070010", name: "Hillkoff Espresso Blend", size: 500 },
-    { barcode: "8850124070027", name: "Hillkoff Classic Blend", size: 500 },
-    { barcode: "8850124070034", name: "Hillkoff Arabica 100%", size: 250 },
+    { name: "Hillkoff Espresso Blend", size: 500 },
+    { name: "Hillkoff Classic Blend", size: 500 },
+    { name: "Hillkoff Arabica 100%", size: 250 },
   ],
   orders: [],
 };
@@ -64,15 +64,6 @@ function bindSectionTabs() {
     });
   });
 
-  $$(".cashier-tabs .section-tab").forEach((button) => {
-    button.addEventListener("click", () => {
-      const target = button.dataset.cashierPanel;
-      $$(".cashier-tabs .section-tab").forEach((item) => item.classList.toggle("active", item === button));
-      $$("[data-cashier-section]").forEach((section) => {
-        section.classList.toggle("active", section.dataset.cashierSection === target);
-      });
-    });
-  });
 }
 
 function bindHost() {
@@ -81,19 +72,17 @@ function bindHost() {
     toast("คัดลอก Host ID แล้ว");
   });
   $("#host-unlock-audio").addEventListener("click", unlockAudio);
-  $("#host-scan-done").addEventListener("click", () => openScanner("pack-done"));
 }
 
 function bindCashier() {
   $("#cashier-unlock-audio").addEventListener("click", unlockAudio);
   $("#scan-host-qr").addEventListener("click", () => openScanner("host-qr"));
   $("#connect-host").addEventListener("click", () => connectToHost($("#manual-host-id").value.trim()));
-  $("#scan-product").addEventListener("click", () => openScanner("product"));
-  $("#barcode").addEventListener("change", () => handleProductBarcode($("#barcode").value.trim()));
+  $("#product-name").addEventListener("input", syncProductFromName);
+  $("#product-name").addEventListener("change", syncProductFromName);
   bindGrindInput();
   $("#send-order").addEventListener("click", sendOrder);
   $("#close-scanner").addEventListener("click", closeScanner);
-  $("#save-new-product").addEventListener("click", saveNewProduct);
 }
 
 function bindGrindInput() {
@@ -183,6 +172,7 @@ function handleHostMessage(message, conn) {
       createdAt: Date.now(),
       ...message.order,
     };
+    rememberProduct(order.name, order.size);
     state.store.orders.unshift(order);
     saveStore();
     ringBell();
@@ -190,25 +180,16 @@ function handleHostMessage(message, conn) {
     renderAll();
   }
 
-  if (message?.type === "product-save") {
-    upsertProduct(message.product);
-    saveStore();
-    broadcastSnapshot();
-    renderAll();
-    sendSnapshot(conn);
-  }
-
   if (message?.type === "hello") sendSnapshot(conn);
 }
 
 function handleCashierMessage(message) {
   if (message?.type !== "snapshot") return;
-  state.store = message.store;
+  state.store = migrateStore(message.store);
   renderAll();
 }
 
 function sendOrder() {
-  const barcode = $("#barcode").value.trim();
   const name = $("#product-name").value.trim();
   const size = Number($("#bag-size").value);
   const qty = Math.max(1, Number($("#qty").value || 1));
@@ -216,16 +197,21 @@ function sendOrder() {
   const customer = $("#customer").value.trim();
 
   if (!state.hostConn?.open) return toast("ยังไม่ได้เชื่อมต่อเครื่องแม่");
-  if (!barcode || !name) return toast("กรุณาสแกนหรือกรอกสินค้า");
+  if (!name) return toast("กรุณากรอกชื่อสินค้า");
   if (!grind) return toast("กรุณาเลือกหรือกรอกเบอร์บด");
+
+  rememberProduct(name, size);
+  saveStore();
 
   state.hostConn.send({
     type: "order",
-    order: { barcode, name, size, qty, grind, customer },
+    order: { name, size, qty, grind, customer },
   });
 
+  $("#product-name").value = "";
   $("#customer").value = "";
   $("#qty").value = 1;
+  renderCashier();
   toast("ส่งออเดอร์แล้ว");
 }
 
@@ -234,69 +220,28 @@ function selectedGrind() {
   return $("#grind").value;
 }
 
-async function handleProductBarcode(barcode) {
-  if (!barcode) return;
-  const known = state.store.products.find((item) => item.barcode === barcode);
-  if (known) {
-    fillProduct(known);
-    toast("พบสินค้าในระบบ");
-    return;
-  }
-
-  $("#new-product-barcode").value = barcode;
-  $("#new-product-name").value = "";
-  $("#new-product-size").value = "500";
-  $("#off-source").textContent = "กำลังค้นข้อมูลจาก Open Food Facts...";
-  $("#product-dialog").showModal();
-
-  try {
-    const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json`);
-    const data = await response.json();
-    const product = data?.product;
-    const name = product?.product_name_th || product?.product_name || product?.brands || "";
-    const size = inferSize(product?.quantity || product?.product_quantity);
-    $("#new-product-name").value = name || "";
-    $("#new-product-size").value = String(size || 500);
-    $("#off-source").textContent = name
-      ? "พบข้อมูลออนไลน์แล้ว ตรวจสอบก่อนบันทึก"
-      : "ไม่พบข้อมูลออนไลน์ สามารถกรอกเองได้";
-  } catch {
-    $("#off-source").textContent = "ค้นออนไลน์ไม่สำเร็จ สามารถกรอกเองได้";
-  }
+function syncProductFromName() {
+  const product = findProductByName($("#product-name").value);
+  if (product?.size) $("#bag-size").value = String(product.size);
 }
 
-function saveNewProduct(event) {
-  event.preventDefault();
-  const product = {
-    barcode: $("#new-product-barcode").value.trim(),
-    name: $("#new-product-name").value.trim(),
-    size: Number($("#new-product-size").value),
-  };
-  if (!product.barcode || !product.name) return toast("กรอกชื่อสินค้าและบาร์โค้ดก่อนบันทึก");
-
-  upsertProduct(product);
-  fillProduct(product);
-  $("#product-dialog").close();
-
-  if (state.hostConn?.open) {
-    state.hostConn.send({ type: "product-save", product });
-    toast("บันทึกสินค้าไปยังเครื่องแม่แล้ว");
-  } else {
-    toast("บันทึกชั่วคราวบนเครื่องนี้ เชื่อมต่อเครื่องแม่เพื่อซิงก์");
-  }
-}
-
-function upsertProduct(product) {
-  const index = state.store.products.findIndex((item) => item.barcode === product.barcode);
-  if (index >= 0) state.store.products[index] = product;
+function rememberProduct(name, size) {
+  const normalizedName = normalizeProductName(name);
+  if (!normalizedName) return;
+  const index = state.store.products.findIndex((item) => normalizeProductName(item.name) === normalizedName);
+  const product = { name: name.trim(), size: Number(size || 500) };
+  if (index >= 0) state.store.products[index] = { ...state.store.products[index], ...product };
   else state.store.products.push(product);
+  renderProductSuggestions();
 }
 
-function fillProduct(product) {
-  $("#barcode").value = product.barcode;
-  $("#product-name").value = product.name;
-  $("#bag-size").value = String(product.size || 500);
-  $("#detected-card").innerHTML = `<span>${product.barcode}</span><strong>${product.name} / ${product.size || 500}g</strong>`;
+function findProductByName(name) {
+  const normalizedName = normalizeProductName(name);
+  return state.store.products.find((item) => normalizeProductName(item.name) === normalizedName);
+}
+
+function normalizeProductName(name = "") {
+  return String(name).trim().toLocaleLowerCase("th-TH");
 }
 
 function setOrderStatus(id, status) {
@@ -309,25 +254,9 @@ function setOrderStatus(id, status) {
   renderAll();
 }
 
-function closeOrderByBarcode(barcode) {
-  const order = state.store.orders
-    .filter((item) => item.barcode === barcode && item.status !== "done")
-    .sort((a, b) => a.createdAt - b.createdAt)[0];
-
-  if (!order) {
-    beep(false);
-    toast("ไม่พบออเดอร์ที่ตรงกับบาร์โค้ดนี้");
-    return;
-  }
-  setOrderStatus(order.id, "done");
-  beep(true);
-  toast(`ปิดคิว ${order.queue} แล้ว`);
-}
-
 async function openScanner(mode) {
   state.scannerMode = mode;
-  $("#scanner-title").textContent =
-    mode === "host-qr" ? "สแกน QR เครื่องแม่" : mode === "pack-done" ? "สแกนถุงที่บดเสร็จ" : "สแกนบาร์โค้ดสินค้า";
+  $("#scanner-title").textContent = "สแกน QR เครื่องแม่";
   $("#scanner-dialog").showModal();
 
   state.scanner = new Html5Qrcode("reader", {
@@ -363,11 +292,6 @@ async function handleScan(text) {
   if (state.scannerMode === "host-qr") {
     $("#manual-host-id").value = value;
     connectToHost(value);
-  } else if (state.scannerMode === "pack-done") {
-    closeOrderByBarcode(value);
-  } else {
-    $("#barcode").value = value;
-    handleProductBarcode(value);
   }
 }
 
@@ -400,6 +324,7 @@ function renderHost() {
 }
 
 function renderCashier() {
+  renderProductSuggestions();
   $("#product-count").textContent = state.store.products.length;
   $("#cashier-wait").textContent = `${totalWait()} นาที`;
   const activeOrders = state.store.orders.filter((order) => order.status !== "done").slice(0, 10);
@@ -407,6 +332,16 @@ function renderCashier() {
     activeOrders
       .map((order) => `<div class="mini-item"><strong>คิว ${order.queue}</strong><span>${order.name} - ${statusLabel(order.status)}</span></div>`)
       .join("") || empty("ยังไม่มีคิวคงค้าง");
+}
+
+function renderProductSuggestions() {
+  const list = $("#product-suggestions");
+  if (!list) return;
+  list.innerHTML = state.store.products
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, "th"))
+    .map((product) => `<option value="${escapeHtml(product.name)}"></option>`)
+    .join("");
 }
 
 function renderReport() {
@@ -455,7 +390,6 @@ function buildExcelHtml(report) {
       <td>${report.date}</td>
       <td>${formatTime(order.createdAt)}</td>
       <td>${escapeHtml(order.queue)}</td>
-      <td>${escapeHtml(order.barcode)}</td>
       <td>${escapeHtml(order.name)}</td>
       <td>${order.size}</td>
       <td>${order.qty}</td>
@@ -479,11 +413,11 @@ function buildExcelHtml(report) {
         <br />
         <table border="1">
           <tr>
-            <th>วันที่</th><th>เวลา</th><th>คิว</th><th>บาร์โค้ด</th><th>สินค้า</th>
+            <th>วันที่</th><th>เวลา</th><th>คิว</th><th>สินค้า</th>
             <th>ขนาดกรัม</th><th>จำนวนถุง</th><th>เบอร์บด</th><th>สถานะ</th>
             <th>ลูกค้า/เลขบิล</th><th>เวลาบดนาที</th>
           </tr>
-          ${rows || '<tr><td colspan="11">ไม่มีข้อมูล</td></tr>'}
+          ${rows || '<tr><td colspan="10">ไม่มีข้อมูล</td></tr>'}
         </table>
       </body>
     </html>
@@ -544,7 +478,7 @@ function orderCard(order) {
       </div>
       <h3>${escapeHtml(order.name)}</h3>
       <p>${order.size}g x ${order.qty} ถุง / ${escapeHtml(order.grind)}</p>
-      <p class="muted">${escapeHtml(order.customer || "ไม่ระบุลูกค้า")} / ${escapeHtml(order.barcode)}</p>
+      <p class="muted">${escapeHtml(order.customer || "ไม่ระบุลูกค้า")}</p>
       <div class="order-actions">${actions[order.status]}</div>
     </article>`;
 }
@@ -591,14 +525,29 @@ function statusLabel(status) {
 
 function loadStore() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || structuredClone(defaultStore);
+    return migrateStore(JSON.parse(localStorage.getItem(STORAGE_KEY)) || structuredClone(defaultStore));
   } catch {
-    return structuredClone(defaultStore);
+    return migrateStore(structuredClone(defaultStore));
   }
 }
 
 function saveStore() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.store));
+}
+
+function migrateStore(store) {
+  const migrated = {
+    ...structuredClone(defaultStore),
+    ...(store || {}),
+  };
+  migrated.products = (migrated.products || [])
+    .filter((product) => product?.name)
+    .map((product) => ({
+      name: product.name,
+      size: Number(product.size || 500),
+    }));
+  migrated.orders = migrated.orders || [];
+  return migrated;
 }
 
 function unlockAudio() {
@@ -632,11 +581,6 @@ function playTone(freq, duration, delay) {
   gain.connect(state.audioCtx.destination);
   osc.start(now);
   osc.stop(now + duration + 0.03);
-}
-
-function inferSize(value = "") {
-  const match = String(value).match(/(250|500|1000)\s*g?/i);
-  return match ? Number(match[1]) : 500;
 }
 
 function randomId() {

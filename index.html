@@ -22,42 +22,16 @@
         </div>
       </div>
       <nav class="mode-switch" aria-label="เลือกโหมดใช้งาน">
-        <button class="mode-btn active" data-view="host">ห้องแพ็ค/บด</button>
-        <button class="mode-btn" data-view="cashier">แคชเชียร์</button>
+        <button class="mode-btn active" data-view="host">รับออเดอร์</button>
+        <button class="mode-btn" data-view="cashier">ส่งออเดอร์</button>
         <button class="mode-btn" data-view="report">รายงาน</button>
+        <button class="mode-btn" data-view="settings">ตั้งค่า</button>
       </nav>
     </header>
 
     <main class="shell">
       <section id="host-view" class="view active">
         <div class="host-layout">
-          <aside class="glass panel connect-panel">
-            <div class="panel-title">
-              <span>เครื่องแม่</span>
-              <strong id="host-status">กำลังสร้าง Host...</strong>
-            </div>
-            <div class="qr-wrap">
-              <canvas id="host-qr" width="220" height="220" aria-label="QR Code สำหรับเชื่อมต่อ"></canvas>
-            </div>
-            <label class="input-label" for="host-peer-id">Host ID</label>
-            <div class="copy-row">
-              <input id="host-peer-id" readonly value="-" />
-              <button id="copy-host-id" class="icon-btn" title="คัดลอก ID">คัดลอก</button>
-            </div>
-            <div class="status-grid">
-              <div>
-                <span>เครื่องลูก</span>
-                <strong id="peer-count">0</strong>
-              </div>
-              <div>
-                <span>เวลารอรวม</span>
-                <strong id="host-wait">0 นาที</strong>
-              </div>
-            </div>
-            <button id="host-unlock-audio" class="btn secondary">เปิดระบบเสียง</button>
-            <button id="host-scan-done" class="btn">สแกนถุงที่บดเสร็จ</button>
-          </aside>
-
           <section class="queue-area">
             <div class="summary-cards">
               <div class="glass metric">
@@ -98,52 +72,19 @@
 
       <section id="cashier-view" class="view">
         <div class="cashier-layout">
-          <div class="section-tabs cashier-tabs" aria-label="เลือกงานแคชเชียร์">
-            <button class="section-tab active" data-cashier-panel="connect">เชื่อมต่อ</button>
-            <button class="section-tab" data-cashier-panel="order">รับออเดอร์</button>
-            <button class="section-tab" data-cashier-panel="queue">ดูคิว</button>
-          </div>
-          <aside class="glass panel cashier-tab-target active" data-cashier-section="connect">
-            <div class="panel-title">
-              <span>เครื่องลูก</span>
-              <strong id="cashier-status">ยังไม่เชื่อมต่อ</strong>
-            </div>
-            <button id="cashier-unlock-audio" class="btn secondary">เปิดระบบเสียง</button>
-            <button id="scan-host-qr" class="btn">สแกน QR เครื่องแม่</button>
-            <label class="input-label" for="manual-host-id">หรือกรอก Host ID</label>
-            <div class="connect-row">
-              <input id="manual-host-id" placeholder="เช่น hk1-ABCD12" autocomplete="off" />
-              <button id="connect-host" class="icon-btn">เชื่อมต่อ</button>
-            </div>
-            <div class="status-grid">
-              <div>
-                <span>สินค้าที่รู้จัก</span>
-                <strong id="product-count">0</strong>
-              </div>
-              <div>
-                <span>คิวคงค้าง</span>
-                <strong id="cashier-wait">0 นาที</strong>
-              </div>
-            </div>
-          </aside>
-
-          <section class="glass order-form cashier-tab-target" data-cashier-section="order">
+          <section class="glass order-form">
             <div class="form-head">
               <div>
-                <p>รับออเดอร์</p>
-                <h2>สแกนถุงกาแฟและส่งเข้าห้องบด</h2>
+                <p>ส่งออเดอร์</p>
+                <h2>พิมพ์ชื่อสินค้าแล้วส่งเข้าห้องบด</h2>
               </div>
-              <button id="scan-product" class="btn secondary">สแกนบาร์โค้ด</button>
             </div>
 
             <div class="form-grid">
               <label>
-                บาร์โค้ด
-                <input id="barcode" placeholder="ยิงบาร์โค้ดหรือพิมพ์เอง" autocomplete="off" />
-              </label>
-              <label>
                 ชื่อสินค้า
-                <input id="product-name" placeholder="เลือก/สแกนสินค้า" />
+                <input id="product-name" list="product-suggestions" placeholder="พิมพ์ตัวแรกเพื่อเลือกสินค้า" autocomplete="off" />
+                <datalist id="product-suggestions"></datalist>
               </label>
               <label>
                 ขนาดถุง
@@ -178,15 +119,10 @@
               </label>
             </div>
 
-            <div class="detected-card" id="detected-card">
-              <span>ยังไม่ได้เลือกสินค้า</span>
-              <strong>สแกนบาร์โค้ดเพื่อค้นหาอัตโนมัติ</strong>
-            </div>
-
             <button id="send-order" class="btn primary">ส่งออเดอร์</button>
           </section>
 
-          <section class="glass queue-preview cashier-tab-target" data-cashier-section="queue">
+          <section class="glass queue-preview">
             <h2>คิวจากเครื่องแม่</h2>
             <div id="cashier-queue-list" class="mini-list"></div>
           </section>
@@ -251,6 +187,60 @@
           </section>
         </div>
       </section>
+
+      <section id="settings-view" class="view">
+        <div class="settings-layout">
+          <aside class="glass panel connect-panel">
+            <div class="panel-title">
+              <span>เครื่องแม่</span>
+              <strong id="host-status">กำลังสร้าง Host...</strong>
+            </div>
+            <div class="qr-wrap">
+              <canvas id="host-qr" width="220" height="220" aria-label="QR Code สำหรับเชื่อมต่อ"></canvas>
+            </div>
+            <label class="input-label" for="host-peer-id">Host ID</label>
+            <div class="copy-row">
+              <input id="host-peer-id" readonly value="-" />
+              <button id="copy-host-id" class="icon-btn" title="คัดลอก ID">คัดลอก</button>
+            </div>
+            <div class="status-grid">
+              <div>
+                <span>เครื่องลูก</span>
+                <strong id="peer-count">0</strong>
+              </div>
+              <div>
+                <span>เวลารอรวม</span>
+                <strong id="host-wait">0 นาที</strong>
+              </div>
+            </div>
+            <button id="host-unlock-audio" class="btn secondary">เปิดระบบเสียงเครื่องแม่</button>
+          </aside>
+
+          <aside class="glass panel connect-panel">
+            <div class="panel-title">
+              <span>เครื่องลูก</span>
+              <strong id="cashier-status">ยังไม่เชื่อมต่อ</strong>
+            </div>
+            <button id="cashier-unlock-audio" class="btn secondary">เปิดระบบเสียงเครื่องลูก</button>
+            <button id="scan-host-qr" class="btn">สแกน QR เครื่องแม่</button>
+            <label class="input-label" for="manual-host-id">หรือกรอก Host ID</label>
+            <div class="connect-row">
+              <input id="manual-host-id" placeholder="เช่น hk1-ABCD12" autocomplete="off" />
+              <button id="connect-host" class="icon-btn">เชื่อมต่อ</button>
+            </div>
+            <div class="status-grid">
+              <div>
+                <span>สินค้าที่จำไว้</span>
+                <strong id="product-count">0</strong>
+              </div>
+              <div>
+                <span>คิวคงค้าง</span>
+                <strong id="cashier-wait">0 นาที</strong>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
     </main>
 
     <dialog id="scanner-dialog" class="glass dialog">
@@ -259,34 +249,7 @@
         <button id="close-scanner" class="icon-btn">ปิด</button>
       </div>
       <div id="reader" class="reader"></div>
-      <p id="scanner-help">อนุญาตกล้อง แล้ววาง QR/บาร์โค้ดไว้กลางกรอบ</p>
-    </dialog>
-
-    <dialog id="product-dialog" class="glass dialog small">
-      <form method="dialog" id="product-dialog-form">
-        <h2>บันทึกสินค้าบาร์โค้ดใหม่</h2>
-        <p id="off-source">ค้นข้อมูลจาก Open Food Facts แล้ว แก้ไขก่อนบันทึกได้</p>
-        <label>
-          บาร์โค้ด
-          <input id="new-product-barcode" required />
-        </label>
-        <label>
-          ชื่อสินค้า
-          <input id="new-product-name" required />
-        </label>
-        <label>
-          ขนาด
-          <select id="new-product-size">
-            <option value="250">250g</option>
-            <option value="500">500g</option>
-            <option value="1000">1000g</option>
-          </select>
-        </label>
-        <div class="dialog-actions">
-          <button value="cancel" class="btn secondary">ยกเลิก</button>
-          <button id="save-new-product" value="default" class="btn primary">บันทึกสินค้า</button>
-        </div>
-      </form>
+      <p id="scanner-help">อนุญาตกล้อง แล้ววาง QR เครื่องแม่ไว้กลางกรอบ</p>
     </dialog>
 
     <div id="toast" class="toast" role="status"></div>

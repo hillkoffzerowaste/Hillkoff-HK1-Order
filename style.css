@@ -185,15 +185,21 @@ button {
   box-shadow: var(--shadow-md);
 }
 
-.host-layout,
-.cashier-layout {
+.host-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: clamp(0.75rem, 1.6vw, 1.2rem);
+}
+
+.cashier-layout,
+.settings-layout {
   display: grid;
   grid-template-columns: minmax(18rem, 22rem) 1fr;
   gap: clamp(0.75rem, 1.6vw, 1.2rem);
 }
 
 .cashier-layout {
-  grid-template-columns: minmax(17rem, 21rem) minmax(24rem, 1fr) minmax(18rem, 24rem);
+  grid-template-columns: minmax(24rem, 1fr) minmax(18rem, 24rem);
 }
 
 .cashier-tabs {
@@ -760,7 +766,8 @@ select:focus {
 
 @media (max-width: 1120px) {
   .host-layout,
-  .cashier-layout {
+  .cashier-layout,
+  .settings-layout {
     grid-template-columns: 1fr;
   }
 
