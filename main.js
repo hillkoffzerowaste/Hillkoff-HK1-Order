@@ -90,9 +90,21 @@ function bindCashier() {
   $("#connect-host").addEventListener("click", () => connectToHost($("#manual-host-id").value.trim()));
   $("#scan-product").addEventListener("click", () => openScanner("product"));
   $("#barcode").addEventListener("change", () => handleProductBarcode($("#barcode").value.trim()));
+  bindGrindInput();
   $("#send-order").addEventListener("click", sendOrder);
   $("#close-scanner").addEventListener("click", closeScanner);
   $("#save-new-product").addEventListener("click", saveNewProduct);
+}
+
+function bindGrindInput() {
+  $("#grind").addEventListener("change", syncCustomGrindVisibility);
+  syncCustomGrindVisibility();
+}
+
+function syncCustomGrindVisibility() {
+  const isCustom = $("#grind").value === "custom";
+  $("#custom-grind-label").classList.toggle("hidden", !isCustom);
+  if (isCustom) $("#custom-grind").focus();
 }
 
 function bindReport() {
@@ -200,11 +212,12 @@ function sendOrder() {
   const name = $("#product-name").value.trim();
   const size = Number($("#bag-size").value);
   const qty = Math.max(1, Number($("#qty").value || 1));
-  const grind = $("#grind").value;
+  const grind = selectedGrind();
   const customer = $("#customer").value.trim();
 
   if (!state.hostConn?.open) return toast("ยังไม่ได้เชื่อมต่อเครื่องแม่");
   if (!barcode || !name) return toast("กรุณาสแกนหรือกรอกสินค้า");
+  if (!grind) return toast("กรุณาเลือกหรือกรอกเบอร์บด");
 
   state.hostConn.send({
     type: "order",
@@ -214,6 +227,11 @@ function sendOrder() {
   $("#customer").value = "";
   $("#qty").value = 1;
   toast("ส่งออเดอร์แล้ว");
+}
+
+function selectedGrind() {
+  if ($("#grind").value === "custom") return $("#custom-grind").value.trim();
+  return $("#grind").value;
 }
 
 async function handleProductBarcode(barcode) {

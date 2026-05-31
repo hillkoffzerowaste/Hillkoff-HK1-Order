@@ -582,6 +582,14 @@ select:focus {
   gap: 0.95rem;
 }
 
+.custom-grind {
+  grid-column: 1 / -1;
+}
+
+.hidden {
+  display: none !important;
+}
+
 .detected-card {
   display: grid;
   gap: 0.2rem;

@@ -160,15 +160,17 @@
               <label>
                 เบอร์บด
                 <select id="grind">
-                  <option>บดละเอียด</option>
-                  <option>บดปานกลาง</option>
-                  <option>ดริป</option>
-                  <option>เอสเพรสโซ่</option>
-                  <option>เฟรนช์เพรส</option>
-                  <option>โมก้าพอต</option>
-                  <option>Cold Brew</option>
-                  <option>ไม่บด</option>
+                  <option value="เบอร์ 6 เครื่องชงตัวใหญ่/เครื่อง ROK">เบอร์ 6 - เครื่องชงตัวใหญ่/เครื่อง ROK</option>
+                  <option value="เบอร์ 8 เครื่องชงเล็ก">เบอร์ 8 - เครื่องชงเล็ก</option>
+                  <option value="เบอร์ 10 ดริป">เบอร์ 10 - ดริป</option>
+                  <option value="เบอร์ 12 French Press">เบอร์ 12 - French Press</option>
+                  <option value="เบอร์ 17 ถุงกรอง">เบอร์ 17 - ถุงกรอง</option>
+                  <option value="custom">ใส่เบอร์บดเอง</option>
                 </select>
+              </label>
+              <label id="custom-grind-label" class="custom-grind hidden">
+                ใส่เบอร์บดเอง
+                <input id="custom-grind" placeholder="เช่น เบอร์ 9 / บดหยาบพิเศษ" autocomplete="off" />
               </label>
               <label>
                 ชื่อลูกค้า/เลขบิล
