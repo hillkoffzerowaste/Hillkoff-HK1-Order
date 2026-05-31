@@ -4,8 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="theme-color" content="#f4f7fb" />
+    <meta name="apple-mobile-web-app-title" content="HK1 Order" />
+    <meta name="theme-color" content="#2563eb" />
     <title>Hillkoff HK1 Order</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -27,6 +30,7 @@
         <button class="mode-btn" data-view="report">รายงาน</button>
         <button class="mode-btn" data-view="settings">ตั้งค่า</button>
       </nav>
+      <button id="install-app" class="install-btn" hidden>ติดตั้งแอพ</button>
     </header>
 
     <main class="shell">
@@ -238,6 +242,25 @@
                 <strong id="cashier-wait">0 นาที</strong>
               </div>
             </div>
+          </aside>
+
+          <aside class="glass panel connect-panel cloud-panel">
+            <div class="panel-title">
+              <span>Firebase</span>
+              <strong id="cloud-status">ยังไม่ได้ตั้งค่า</strong>
+            </div>
+            <p id="cloud-detail" class="cloud-detail">ใส่ค่า Firebase ในไฟล์ .env เพื่อเปิดการซิงก์ออนไลน์</p>
+            <div class="status-grid">
+              <div>
+                <span>พื้นที่เก็บข้อมูล</span>
+                <strong>Local</strong>
+              </div>
+              <div>
+                <span>ออนไลน์</span>
+                <strong>Cloud</strong>
+              </div>
+            </div>
+            <button id="cloud-sync-now" class="btn secondary">ซิงก์ตอนนี้</button>
           </aside>
         </div>
       </section>

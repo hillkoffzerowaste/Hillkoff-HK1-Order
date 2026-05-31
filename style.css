@@ -161,6 +161,27 @@ button {
   background: var(--blue-soft);
 }
 
+.install-btn {
+  cursor: pointer;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 999px;
+  padding: 0.75rem 1rem;
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #0f766e);
+  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.18);
+  font-weight: 800;
+  white-space: nowrap;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.install-btn:active {
+  transform: scale(0.98);
+}
+
+.install-btn[hidden] {
+  display: none;
+}
+
 .shell {
   position: relative;
   width: min(1480px, 100%);
@@ -204,6 +225,16 @@ button {
 
 .cashier-tabs {
   grid-column: 1 / -1;
+}
+
+.cloud-panel {
+  grid-column: 1 / -1;
+}
+
+.cloud-detail {
+  margin: 0.4rem 0 1rem;
+  color: var(--muted);
+  line-height: 1.6;
 }
 
 .panel,
@@ -827,6 +858,10 @@ select:focus {
 
   .topbar {
     gap: 0.75rem;
+  }
+
+  .install-btn {
+    width: 100%;
   }
 
   .brand {

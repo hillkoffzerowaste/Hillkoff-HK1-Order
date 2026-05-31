@@ -1,6 +1,7 @@
 import Peer from "peerjs";
 import QRCode from "qrcode";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
+import { createCloudStore } from "./firebase-store.js";
 
 const STORAGE_KEY = "hk1-host-store-v1";
 const HOST_PREFIX = "hk1";
@@ -13,6 +14,7 @@ const defaultStore = {
     { name: "Hillkoff Arabica 100%", size: 250 },
   ],
   orders: [],
+  updatedAt: 0,
 };
 
 const state = {
@@ -25,6 +27,10 @@ const state = {
   scanner: null,
   scannerMode: null,
   audioCtx: null,
+  cloudStore: null,
+  cloudSaveTimer: null,
+  cloudUnsubscribe: null,
+  installPrompt: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -38,8 +44,12 @@ function boot() {
   bindHost();
   bindCashier();
   bindReport();
+  bindCloudControls();
+  bindInstallApp();
+  registerServiceWorker();
   renderAll();
   startHost();
+  initCloudSync();
 }
 
 function bindViews() {
@@ -83,6 +93,48 @@ function bindCashier() {
   bindGrindInput();
   $("#send-order").addEventListener("click", sendOrder);
   $("#close-scanner").addEventListener("click", closeScanner);
+}
+
+function bindCloudControls() {
+  $("#cloud-sync-now")?.addEventListener("click", () => syncCloudNow({ force: true }));
+}
+
+function bindInstallApp() {
+  const installButton = $("#install-app");
+  if (!installButton) return;
+
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    state.installPrompt = event;
+    installButton.hidden = false;
+  });
+
+  installButton.addEventListener("click", async () => {
+    if (!state.installPrompt) {
+      toast("บนมือถือให้กดเมนู browser แล้วเลือก เพิ่มไปยังหน้าจอหลัก");
+      return;
+    }
+    state.installPrompt.prompt();
+    const result = await state.installPrompt.userChoice;
+    state.installPrompt = null;
+    installButton.hidden = true;
+    if (result.outcome === "accepted") toast("ติดตั้งแอพแล้ว");
+  });
+
+  window.addEventListener("appinstalled", () => {
+    state.installPrompt = null;
+    installButton.hidden = true;
+    toast("ติดตั้งแอพเรียบร้อย");
+  });
+}
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      toast("เตรียมโหมดแอพไม่สำเร็จ");
+    });
+  });
 }
 
 function bindGrindInput() {
@@ -165,15 +217,7 @@ function connectToHost(peerId) {
 
 function handleHostMessage(message, conn) {
   if (message?.type === "order") {
-    const order = {
-      id: crypto.randomUUID(),
-      queue: nextQueue(),
-      status: "waiting",
-      createdAt: Date.now(),
-      ...message.order,
-    };
-    rememberProduct(order.name, order.size);
-    state.store.orders.unshift(order);
+    createQueuedOrder(message.order);
     saveStore();
     ringBell();
     broadcastSnapshot();
@@ -186,6 +230,7 @@ function handleHostMessage(message, conn) {
 function handleCashierMessage(message) {
   if (message?.type !== "snapshot") return;
   state.store = migrateStore(message.store);
+  saveStore({ syncCloud: false, touch: false });
   renderAll();
 }
 
@@ -196,23 +241,43 @@ function sendOrder() {
   const grind = selectedGrind();
   const customer = $("#customer").value.trim();
 
-  if (!state.hostConn?.open) return toast("ยังไม่ได้เชื่อมต่อเครื่องแม่");
   if (!name) return toast("กรุณากรอกชื่อสินค้า");
   if (!grind) return toast("กรุณาเลือกหรือกรอกเบอร์บด");
 
   rememberProduct(name, size);
-  saveStore();
+  const orderPayload = { name, size, qty, grind, customer };
 
-  state.hostConn.send({
-    type: "order",
-    order: { name, size, qty, grind, customer },
-  });
+  if (state.hostConn?.open) {
+    state.hostConn.send({ type: "order", order: orderPayload });
+    saveStore({ syncCloud: false });
+    toast("ส่งออเดอร์แล้ว");
+  } else if (state.cloudStore?.enabled) {
+    createQueuedOrder(orderPayload);
+    saveStore();
+    renderAll();
+    toast("บันทึกออเดอร์ออนไลน์แล้ว");
+  } else {
+    saveStore();
+    return toast("ยังไม่ได้เชื่อมต่อเครื่องแม่");
+  }
 
   $("#product-name").value = "";
   $("#customer").value = "";
   $("#qty").value = 1;
   renderCashier();
-  toast("ส่งออเดอร์แล้ว");
+}
+
+function createQueuedOrder(orderPayload) {
+  const order = {
+    id: crypto.randomUUID(),
+    queue: nextQueue(),
+    status: "waiting",
+    createdAt: Date.now(),
+    ...orderPayload,
+  };
+  rememberProduct(order.name, order.size);
+  state.store.orders.unshift(order);
+  return order;
 }
 
 function selectedGrind() {
@@ -531,8 +596,10 @@ function loadStore() {
   }
 }
 
-function saveStore() {
+function saveStore({ syncCloud = true, touch = true } = {}) {
+  if (touch) state.store.updatedAt = Date.now();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.store));
+  if (syncCloud) scheduleCloudSave();
 }
 
 function migrateStore(store) {
@@ -540,6 +607,7 @@ function migrateStore(store) {
     ...structuredClone(defaultStore),
     ...(store || {}),
   };
+  migrated.updatedAt = Number(migrated.updatedAt || Date.now());
   migrated.products = (migrated.products || [])
     .filter((product) => product?.name)
     .map((product) => ({
@@ -548,6 +616,65 @@ function migrateStore(store) {
     }));
   migrated.orders = migrated.orders || [];
   return migrated;
+}
+
+function initCloudSync() {
+  state.cloudStore = createCloudStore();
+  renderCloudStatus("ยังไม่ได้ตั้งค่า", "ใส่ค่า Firebase ในไฟล์ .env แล้วเปิดเว็บใหม่เพื่อเริ่มซิงก์ออนไลน์");
+
+  if (!state.cloudStore.enabled) return;
+
+  renderCloudStatus("กำลังเชื่อมต่อ", `Project: ${state.cloudStore.config.projectId}`);
+  syncCloudNow({ force: true });
+  state.cloudUnsubscribe = state.cloudStore.startPolling(handleRemoteStore, (error) => {
+    renderCloudStatus("ซิงก์มีปัญหา", error.message || "ตรวจ Firebase ไม่สำเร็จ");
+  });
+}
+
+function scheduleCloudSave() {
+  if (!state.cloudStore?.enabled) return;
+  window.clearTimeout(state.cloudSaveTimer);
+  state.cloudSaveTimer = window.setTimeout(() => syncCloudNow(), 1200);
+}
+
+async function syncCloudNow({ force = false } = {}) {
+  if (!state.cloudStore?.enabled) {
+    renderCloudStatus("ยังไม่ได้ตั้งค่า", "ใส่ค่า Firebase ในไฟล์ .env ก่อนใช้งานออนไลน์");
+    return;
+  }
+
+  try {
+    if (force) {
+      renderCloudStatus("กำลังตรวจข้อมูล", "กำลังเทียบข้อมูลในเครื่องกับ Firebase");
+      const remoteStore = await state.cloudStore.load();
+      if (remoteStore && handleRemoteStore(remoteStore)) return;
+    }
+
+    renderCloudStatus("กำลังซิงก์", "กำลังบันทึกข้อมูลขึ้น Firebase");
+    await state.cloudStore.save(migrateStore(state.store));
+    renderCloudStatus("ออนไลน์พร้อมใช้", `ซิงก์ล่าสุด ${formatTime(Date.now())}`);
+  } catch (error) {
+    renderCloudStatus("ซิงก์มีปัญหา", error.message || "บันทึก Firebase ไม่สำเร็จ");
+  }
+}
+
+function handleRemoteStore(remoteStore) {
+  const remote = migrateStore(remoteStore);
+  if ((remote.updatedAt || 0) <= (state.store.updatedAt || 0)) return false;
+
+  state.store = remote;
+  saveStore({ syncCloud: false, touch: false });
+  renderAll();
+  broadcastSnapshot();
+  renderCloudStatus("รับข้อมูลออนไลน์แล้ว", `อัปเดตล่าสุด ${formatTime(remote.updatedAt)}`);
+  return true;
+}
+
+function renderCloudStatus(status, detail) {
+  const statusEl = $("#cloud-status");
+  const detailEl = $("#cloud-detail");
+  if (statusEl) statusEl.textContent = status;
+  if (detailEl) detailEl.textContent = detail;
 }
 
 function unlockAudio() {
