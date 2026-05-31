@@ -1,7 +1,7 @@
 import Peer from "peerjs";
 import QRCode from "qrcode";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
-import { createCloudStore } from "./firebase-store.js";
+import { createCloudStore } from "./sheets-store.js";
 
 const STORAGE_KEY = "hk1-host-store-v1";
 const HOST_ID_KEY = "hk1-fixed-host-id";
@@ -654,14 +654,14 @@ function migrateStore(store) {
 
 function initCloudSync() {
   state.cloudStore = createCloudStore();
-  renderCloudStatus("ยังไม่ได้ตั้งค่า", "ใส่ค่า Firebase ในไฟล์ .env แล้วเปิดเว็บใหม่เพื่อเริ่มซิงก์ออนไลน์");
+  renderCloudStatus("ยังไม่ได้ตั้งค่า", "ใส่ URL Google Sheets Web App ในไฟล์ .env แล้วเปิดเว็บใหม่เพื่อเริ่มซิงก์ออนไลน์");
 
   if (!state.cloudStore.enabled) return;
 
-  renderCloudStatus("กำลังเชื่อมต่อ", `Project: ${state.cloudStore.config.projectId}`);
+  renderCloudStatus("กำลังเชื่อมต่อ", "กำลังเชื่อมต่อ Google Sheets");
   syncCloudNow({ force: true });
   state.cloudUnsubscribe = state.cloudStore.startPolling(handleRemoteStore, (error) => {
-    renderCloudStatus("ซิงก์มีปัญหา", error.message || "ตรวจ Firebase ไม่สำเร็จ");
+    renderCloudStatus("ซิงก์มีปัญหา", error.message || "ตรวจ Google Sheets ไม่สำเร็จ");
   });
 }
 
@@ -673,22 +673,22 @@ function scheduleCloudSave() {
 
 async function syncCloudNow({ force = false } = {}) {
   if (!state.cloudStore?.enabled) {
-    renderCloudStatus("ยังไม่ได้ตั้งค่า", "ใส่ค่า Firebase ในไฟล์ .env ก่อนใช้งานออนไลน์");
+    renderCloudStatus("ยังไม่ได้ตั้งค่า", "ใส่ URL Google Sheets Web App ในไฟล์ .env ก่อนใช้งานออนไลน์");
     return;
   }
 
   try {
     if (force) {
-      renderCloudStatus("กำลังตรวจข้อมูล", "กำลังเทียบข้อมูลในเครื่องกับ Firebase");
+      renderCloudStatus("กำลังตรวจข้อมูล", "กำลังเทียบข้อมูลในเครื่องกับ Google Sheets");
       const remoteStore = await state.cloudStore.load();
       if (remoteStore && handleRemoteStore(remoteStore)) return;
     }
 
-    renderCloudStatus("กำลังซิงก์", "กำลังบันทึกข้อมูลขึ้น Firebase");
+    renderCloudStatus("กำลังซิงก์", "กำลังบันทึกข้อมูลขึ้น Google Sheets");
     await state.cloudStore.save(migrateStore(state.store));
     renderCloudStatus("ออนไลน์พร้อมใช้", `ซิงก์ล่าสุด ${formatTime(Date.now())}`);
   } catch (error) {
-    renderCloudStatus("ซิงก์มีปัญหา", error.message || "บันทึก Firebase ไม่สำเร็จ");
+    renderCloudStatus("ซิงก์มีปัญหา", error.message || "บันทึก Google Sheets ไม่สำเร็จ");
   }
 }
 
