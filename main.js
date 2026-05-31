@@ -6,6 +6,7 @@ import { createCloudStore } from "./sheets-store.js";
 const STORAGE_KEY = "hk1-host-store-v1";
 const HOST_ID_KEY = "hk1-fixed-host-id";
 const LAST_HOST_ID_KEY = "hk1-last-host-id";
+const SHEETS_URL_KEY = "hk1-sheets-web-app-url";
 const HOST_PREFIX = "hk1";
 const WAIT_MINUTES = { 250: 1, 500: 2, 1000: 4 };
 
@@ -103,6 +104,19 @@ function bindCashier() {
 
 function bindCloudControls() {
   $("#cloud-sync-now")?.addEventListener("click", () => syncCloudNow({ force: true }));
+  const sheetsUrlInput = $("#sheets-web-app-url");
+  if (sheetsUrlInput) sheetsUrlInput.value = getSheetsWebAppUrl();
+  $("#save-sheets-url")?.addEventListener("click", () => {
+    const url = sheetsUrlInput.value.trim();
+    if (!url) {
+      localStorage.removeItem(SHEETS_URL_KEY);
+      toast("ล้าง URL Google Sheets แล้ว");
+    } else {
+      localStorage.setItem(SHEETS_URL_KEY, url);
+      toast("บันทึก URL Google Sheets แล้ว");
+    }
+    initCloudSync();
+  });
 }
 
 function bindInstallApp() {
@@ -653,8 +667,15 @@ function migrateStore(store) {
 }
 
 function initCloudSync() {
-  state.cloudStore = createCloudStore();
-  renderCloudStatus("ยังไม่ได้ตั้งค่า", "ใส่ URL Google Sheets Web App ในไฟล์ .env แล้วเปิดเว็บใหม่เพื่อเริ่มซิงก์ออนไลน์");
+  state.cloudUnsubscribe?.();
+  state.cloudStore?.stopPolling?.();
+  state.cloudStore = createCloudStore({
+    ...import.meta.env,
+    VITE_SHEETS_WEB_APP_URL: getSheetsWebAppUrl(),
+  });
+  const sheetsUrlInput = $("#sheets-web-app-url");
+  if (sheetsUrlInput) sheetsUrlInput.value = getSheetsWebAppUrl();
+  renderCloudStatus("ยังไม่ได้ตั้งค่า", "ใส่ URL Google Sheets Web App ในช่องด้านล่าง แล้วกดบันทึกเพื่อเริ่มซิงก์ออนไลน์");
 
   if (!state.cloudStore.enabled) return;
 
@@ -709,6 +730,10 @@ function renderCloudStatus(status, detail) {
   const detailEl = $("#cloud-detail");
   if (statusEl) statusEl.textContent = status;
   if (detailEl) detailEl.textContent = detail;
+}
+
+function getSheetsWebAppUrl() {
+  return localStorage.getItem(SHEETS_URL_KEY) || import.meta.env.VITE_SHEETS_WEB_APP_URL || "";
 }
 
 function unlockAudio() {
