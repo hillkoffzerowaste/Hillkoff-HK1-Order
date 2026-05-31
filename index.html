@@ -127,7 +127,7 @@
           </section>
 
           <section class="glass queue-preview">
-            <h2>คิวจากเครื่องแม่</h2>
+            <h2>คิวออเดอร์ล่าสุด</h2>
             <div id="cashier-queue-list" class="mini-list"></div>
           </section>
         </div>
@@ -194,56 +194,6 @@
 
       <section id="settings-view" class="view">
         <div class="settings-layout">
-          <aside class="glass panel connect-panel">
-            <div class="panel-title">
-              <span>เครื่องแม่</span>
-              <strong id="host-status">กำลังสร้าง Host...</strong>
-            </div>
-            <div class="qr-wrap">
-              <canvas id="host-qr" width="220" height="220" aria-label="QR Code สำหรับเชื่อมต่อ"></canvas>
-            </div>
-            <label class="input-label" for="host-peer-id">Host ID</label>
-            <div class="copy-row">
-              <input id="host-peer-id" readonly value="-" />
-              <button id="copy-host-id" class="icon-btn" title="คัดลอก ID">คัดลอก</button>
-            </div>
-            <div class="status-grid">
-              <div>
-                <span>เครื่องลูก</span>
-                <strong id="peer-count">0</strong>
-              </div>
-              <div>
-                <span>เวลารอรวม</span>
-                <strong id="host-wait">0 นาที</strong>
-              </div>
-            </div>
-            <button id="host-unlock-audio" class="btn secondary">เปิดระบบเสียงเครื่องแม่</button>
-          </aside>
-
-          <aside class="glass panel connect-panel">
-            <div class="panel-title">
-              <span>เครื่องลูก</span>
-              <strong id="cashier-status">ยังไม่เชื่อมต่อ</strong>
-            </div>
-            <button id="cashier-unlock-audio" class="btn secondary">เปิดระบบเสียงเครื่องลูก</button>
-            <button id="scan-host-qr" class="btn">สแกน QR เครื่องแม่</button>
-            <label class="input-label" for="manual-host-id">หรือกรอก Host ID</label>
-            <div class="connect-row">
-              <input id="manual-host-id" placeholder="เช่น hk1-ABCD12" autocomplete="off" />
-              <button id="connect-host" class="icon-btn">เชื่อมต่อ</button>
-            </div>
-            <div class="status-grid">
-              <div>
-                <span>สินค้าที่จำไว้</span>
-                <strong id="product-count">0</strong>
-              </div>
-              <div>
-                <span>คิวคงค้าง</span>
-                <strong id="cashier-wait">0 นาที</strong>
-              </div>
-            </div>
-          </aside>
-
           <aside class="glass panel connect-panel cloud-panel">
             <div class="panel-title">
               <span>Google Sheets</span>
@@ -270,15 +220,6 @@
         </div>
       </section>
     </main>
-
-    <dialog id="scanner-dialog" class="glass dialog">
-      <div class="dialog-head">
-        <h2 id="scanner-title">สแกน</h2>
-        <button id="close-scanner" class="icon-btn">ปิด</button>
-      </div>
-      <div id="reader" class="reader"></div>
-      <p id="scanner-help">อนุญาตกล้อง แล้ววาง QR เครื่องแม่ไว้กลางกรอบ</p>
-    </dialog>
 
     <div id="toast" class="toast" role="status"></div>
     <script type="module" src="/main.js"></script>

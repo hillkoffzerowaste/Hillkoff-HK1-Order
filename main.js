@@ -1,13 +1,7 @@
-import Peer from "peerjs";
-import QRCode from "qrcode";
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { createCloudStore } from "./sheets-store.js";
 
 const STORAGE_KEY = "hk1-host-store-v1";
-const HOST_ID_KEY = "hk1-fixed-host-id";
-const LAST_HOST_ID_KEY = "hk1-last-host-id";
 const SHEETS_URL_KEY = "hk1-sheets-web-app-url";
-const HOST_PREFIX = "hk1";
 const WAIT_MINUTES = { 250: 1, 500: 2, 1000: 4 };
 
 const defaultStore = {
@@ -23,19 +17,10 @@ const defaultStore = {
 const state = {
   view: "host",
   store: loadStore(),
-  hostPeer: null,
-  cashierPeer: null,
-  hostConn: null,
-  clientConns: new Map(),
-  scanner: null,
-  scannerMode: null,
-  audioCtx: null,
   cloudStore: null,
   cloudSaveTimer: null,
   cloudUnsubscribe: null,
   installPrompt: null,
-  reconnectTimer: null,
-  lastHostId: localStorage.getItem(LAST_HOST_ID_KEY) || "",
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -46,15 +31,12 @@ boot();
 function boot() {
   bindViews();
   bindSectionTabs();
-  bindHost();
   bindCashier();
   bindReport();
   bindCloudControls();
   bindInstallApp();
   registerServiceWorker();
   renderAll();
-  startHost();
-  reconnectLastHost();
   initCloudSync();
 }
 
@@ -82,24 +64,11 @@ function bindSectionTabs() {
 
 }
 
-function bindHost() {
-  $("#copy-host-id").addEventListener("click", async () => {
-    await navigator.clipboard?.writeText($("#host-peer-id").value);
-    toast("คัดลอก Host ID แล้ว");
-  });
-  $("#host-unlock-audio").addEventListener("click", unlockAudio);
-}
-
 function bindCashier() {
-  $("#cashier-unlock-audio").addEventListener("click", unlockAudio);
-  $("#scan-host-qr").addEventListener("click", () => openScanner("host-qr"));
-  $("#connect-host").addEventListener("click", () => connectToHost($("#manual-host-id").value.trim()));
-  if (state.lastHostId) $("#manual-host-id").value = state.lastHostId;
   $("#product-name").addEventListener("input", syncProductFromName);
   $("#product-name").addEventListener("change", syncProductFromName);
   bindGrindInput();
   $("#send-order").addEventListener("click", sendOrder);
-  $("#close-scanner").addEventListener("click", closeScanner);
 }
 
 function bindCloudControls() {
@@ -180,108 +149,6 @@ function bindReport() {
   $("#export-report").addEventListener("click", exportDailyReport);
 }
 
-function startHost(preferredId = localStorage.getItem(HOST_ID_KEY) || `${HOST_PREFIX}-${randomId()}`) {
-  const isSavedId = preferredId === localStorage.getItem(HOST_ID_KEY);
-  state.hostPeer = new Peer(preferredId, { debug: 1 });
-
-  state.hostPeer.on("open", (id) => {
-    localStorage.setItem(HOST_ID_KEY, id);
-    $("#host-status").textContent = "พร้อมเชื่อมต่อ";
-    $("#host-peer-id").value = id;
-    QRCode.toCanvas($("#host-qr"), `HK1_HOST:${id}`, {
-      width: 220,
-      margin: 1,
-      color: { dark: "#3a241a", light: "#fff8ee" },
-    });
-  });
-
-  state.hostPeer.on("connection", (conn) => {
-    state.clientConns.set(conn.peer, conn);
-    updateConnectionUi();
-    conn.on("open", () => sendSnapshot(conn));
-    conn.on("data", (message) => handleHostMessage(message, conn));
-    conn.on("close", () => {
-      state.clientConns.delete(conn.peer);
-      updateConnectionUi();
-    });
-  });
-
-  state.hostPeer.on("error", (error) => {
-    if (error.type === "unavailable-id" && !isSavedId) {
-      startHost(`${HOST_PREFIX}-${randomId()}`);
-      return;
-    }
-    $("#host-status").textContent = "Host มีปัญหา";
-    toast(error.message || "สร้าง Host ไม่สำเร็จ");
-  });
-}
-
-function connectToHost(peerId, { silent = false } = {}) {
-  if (!peerId) return toast("กรุณากรอก Host ID");
-  if (state.cashierPeer) state.cashierPeer.destroy();
-  window.clearTimeout(state.reconnectTimer);
-
-  $("#cashier-status").textContent = "กำลังเชื่อมต่อ...";
-  state.cashierPeer = new Peer(undefined, { debug: 1 });
-  state.cashierPeer.on("open", () => {
-    state.hostConn = state.cashierPeer.connect(peerId, { reliable: true });
-    state.hostConn.on("open", () => {
-      rememberHostConnection(peerId);
-      $("#cashier-status").textContent = "เชื่อมต่อแล้ว";
-      if (!silent) toast("เชื่อมต่อเครื่องแม่แล้ว");
-      state.hostConn.send({ type: "hello" });
-    });
-    state.hostConn.on("data", handleCashierMessage);
-    state.hostConn.on("close", () => {
-      $("#cashier-status").textContent = "หลุดการเชื่อมต่อ";
-      scheduleHostReconnect();
-    });
-  });
-  state.cashierPeer.on("error", (error) => {
-    $("#cashier-status").textContent = "เชื่อมต่อไม่สำเร็จ";
-    if (!silent) toast(error.message || "เชื่อมต่อเครื่องแม่ไม่สำเร็จ");
-    scheduleHostReconnect();
-  });
-}
-
-function rememberHostConnection(peerId) {
-  state.lastHostId = peerId;
-  localStorage.setItem(LAST_HOST_ID_KEY, peerId);
-  $("#manual-host-id").value = peerId;
-}
-
-function reconnectLastHost() {
-  if (!state.lastHostId) return;
-  window.setTimeout(() => connectToHost(state.lastHostId, { silent: true }), 700);
-}
-
-function scheduleHostReconnect() {
-  if (!state.lastHostId) return;
-  window.clearTimeout(state.reconnectTimer);
-  state.reconnectTimer = window.setTimeout(() => {
-    if (!state.hostConn?.open) connectToHost(state.lastHostId, { silent: true });
-  }, 5000);
-}
-
-function handleHostMessage(message, conn) {
-  if (message?.type === "order") {
-    createQueuedOrder(message.order);
-    saveStore();
-    ringBell();
-    broadcastSnapshot();
-    renderAll();
-  }
-
-  if (message?.type === "hello") sendSnapshot(conn);
-}
-
-function handleCashierMessage(message) {
-  if (message?.type !== "snapshot") return;
-  state.store = migrateStore(message.store);
-  saveStore({ syncCloud: false, touch: false });
-  renderAll();
-}
-
 function sendOrder() {
   const name = $("#product-name").value.trim();
   const size = Number($("#bag-size").value);
@@ -293,26 +160,14 @@ function sendOrder() {
   if (!grind) return toast("กรุณาเลือกหรือกรอกเบอร์บด");
 
   rememberProduct(name, size);
-  const orderPayload = { name, size, qty, grind, customer };
-
-  if (state.hostConn?.open) {
-    state.hostConn.send({ type: "order", order: orderPayload });
-    saveStore({ syncCloud: false });
-    toast("ส่งออเดอร์แล้ว");
-  } else if (state.cloudStore?.enabled) {
-    createQueuedOrder(orderPayload);
-    saveStore();
-    renderAll();
-    toast("บันทึกออเดอร์ออนไลน์แล้ว");
-  } else {
-    saveStore();
-    return toast("ยังไม่ได้เชื่อมต่อเครื่องแม่");
-  }
+  createQueuedOrder({ name, size, qty, grind, customer });
+  saveStore();
 
   $("#product-name").value = "";
   $("#customer").value = "";
   $("#qty").value = 1;
-  renderCashier();
+  renderAll();
+  toast(state.cloudStore?.enabled ? "บันทึกออเดอร์ออนไลน์แล้ว" : "บันทึกออเดอร์แล้ว");
 }
 
 function createQueuedOrder(orderPayload) {
@@ -363,49 +218,7 @@ function setOrderStatus(id, status) {
   order.status = status;
   if (status === "done") order.doneAt = Date.now();
   saveStore();
-  broadcastSnapshot();
   renderAll();
-}
-
-async function openScanner(mode) {
-  state.scannerMode = mode;
-  $("#scanner-title").textContent = "สแกน QR เครื่องแม่";
-  $("#scanner-dialog").showModal();
-
-  state.scanner = new Html5Qrcode("reader", {
-    formatsToSupport: [
-      Html5QrcodeSupportedFormats.QR_CODE,
-      Html5QrcodeSupportedFormats.EAN_13,
-      Html5QrcodeSupportedFormats.CODE_128,
-      Html5QrcodeSupportedFormats.UPC_A,
-    ],
-  });
-
-  try {
-    await state.scanner.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 260, height: 180 } },
-      (decodedText) => handleScan(decodedText),
-    );
-  } catch (error) {
-    toast(error.message || "เปิดกล้องไม่สำเร็จ");
-  }
-}
-
-async function closeScanner() {
-  if (state.scanner?.isScanning) await state.scanner.stop();
-  state.scanner?.clear();
-  state.scanner = null;
-  $("#scanner-dialog").close();
-}
-
-async function handleScan(text) {
-  await closeScanner();
-  const value = text.replace("HK1_HOST:", "").trim();
-  if (state.scannerMode === "host-qr") {
-    $("#manual-host-id").value = value;
-    connectToHost(value);
-  }
 }
 
 function renderAll() {
@@ -428,18 +241,14 @@ function renderHost() {
   $("#count-waiting").textContent = groups.waiting.length;
   $("#count-grinding").textContent = groups.grinding.length;
   $("#count-done").textContent = state.store.orders.filter((order) => order.status === "done").length;
-  $("#host-wait").textContent = `${totalWait()} นาที`;
 
   $$(".order-action").forEach((button) => {
     button.addEventListener("click", () => setOrderStatus(button.dataset.id, button.dataset.status));
   });
-  updateConnectionUi();
 }
 
 function renderCashier() {
   renderProductSuggestions();
-  $("#product-count").textContent = state.store.products.length;
-  $("#cashier-wait").textContent = `${totalWait()} นาที`;
   const activeOrders = state.store.orders.filter((order) => order.status !== "done").slice(0, 10);
   $("#cashier-queue-list").innerHTML =
     activeOrders
@@ -596,18 +405,6 @@ function orderCard(order) {
     </article>`;
 }
 
-function sendSnapshot(conn) {
-  if (conn?.open) conn.send({ type: "snapshot", store: state.store });
-}
-
-function broadcastSnapshot() {
-  state.clientConns.forEach(sendSnapshot);
-}
-
-function updateConnectionUi() {
-  $("#peer-count").textContent = state.clientConns.size;
-}
-
 function totalWait() {
   return state.store.orders
     .filter((order) => order.status !== "done")
@@ -720,7 +517,6 @@ function handleRemoteStore(remoteStore) {
   state.store = remote;
   saveStore({ syncCloud: false, touch: false });
   renderAll();
-  broadcastSnapshot();
   renderCloudStatus("รับข้อมูลออนไลน์แล้ว", `อัปเดตล่าสุด ${formatTime(remote.updatedAt)}`);
   return true;
 }
@@ -734,43 +530,6 @@ function renderCloudStatus(status, detail) {
 
 function getSheetsWebAppUrl() {
   return localStorage.getItem(SHEETS_URL_KEY) || import.meta.env.VITE_SHEETS_WEB_APP_URL || "";
-}
-
-function unlockAudio() {
-  state.audioCtx = state.audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-  state.audioCtx.resume();
-  beep(true);
-  toast("เปิดระบบเสียงแล้ว");
-}
-
-function ringBell() {
-  if (!state.audioCtx) return;
-  playTone(784, 0.14, 0);
-  playTone(988, 0.22, 0.12);
-}
-
-function beep(success) {
-  if (!state.audioCtx) return;
-  playTone(success ? 1046 : 220, 0.16, 0);
-}
-
-function playTone(freq, duration, delay) {
-  const now = state.audioCtx.currentTime + delay;
-  const osc = state.audioCtx.createOscillator();
-  const gain = state.audioCtx.createGain();
-  osc.type = "sine";
-  osc.frequency.value = freq;
-  gain.gain.setValueAtTime(0.001, now);
-  gain.gain.exponentialRampToValueAtTime(0.18, now + 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  osc.connect(gain);
-  gain.connect(state.audioCtx.destination);
-  osc.start(now);
-  osc.stop(now + duration + 0.03);
-}
-
-function randomId() {
-  return Math.random().toString(36).slice(2, 8).toUpperCase();
 }
 
 function empty(text) {
