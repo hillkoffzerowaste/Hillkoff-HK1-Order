@@ -4,6 +4,8 @@ import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { createCloudStore } from "./firebase-store.js";
 
 const STORAGE_KEY = "hk1-host-store-v1";
+const HOST_ID_KEY = "hk1-fixed-host-id";
+const LAST_HOST_ID_KEY = "hk1-last-host-id";
 const HOST_PREFIX = "hk1";
 const WAIT_MINUTES = { 250: 1, 500: 2, 1000: 4 };
 
@@ -31,6 +33,8 @@ const state = {
   cloudSaveTimer: null,
   cloudUnsubscribe: null,
   installPrompt: null,
+  reconnectTimer: null,
+  lastHostId: localStorage.getItem(LAST_HOST_ID_KEY) || "",
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -49,6 +53,7 @@ function boot() {
   registerServiceWorker();
   renderAll();
   startHost();
+  reconnectLastHost();
   initCloudSync();
 }
 
@@ -88,6 +93,7 @@ function bindCashier() {
   $("#cashier-unlock-audio").addEventListener("click", unlockAudio);
   $("#scan-host-qr").addEventListener("click", () => openScanner("host-qr"));
   $("#connect-host").addEventListener("click", () => connectToHost($("#manual-host-id").value.trim()));
+  if (state.lastHostId) $("#manual-host-id").value = state.lastHostId;
   $("#product-name").addEventListener("input", syncProductFromName);
   $("#product-name").addEventListener("change", syncProductFromName);
   bindGrindInput();
@@ -160,11 +166,12 @@ function bindReport() {
   $("#export-report").addEventListener("click", exportDailyReport);
 }
 
-function startHost() {
-  const preferredId = `${HOST_PREFIX}-${randomId()}`;
+function startHost(preferredId = localStorage.getItem(HOST_ID_KEY) || `${HOST_PREFIX}-${randomId()}`) {
+  const isSavedId = preferredId === localStorage.getItem(HOST_ID_KEY);
   state.hostPeer = new Peer(preferredId, { debug: 1 });
 
   state.hostPeer.on("open", (id) => {
+    localStorage.setItem(HOST_ID_KEY, id);
     $("#host-status").textContent = "พร้อมเชื่อมต่อ";
     $("#host-peer-id").value = id;
     QRCode.toCanvas($("#host-qr"), `HK1_HOST:${id}`, {
@@ -186,33 +193,60 @@ function startHost() {
   });
 
   state.hostPeer.on("error", (error) => {
+    if (error.type === "unavailable-id" && !isSavedId) {
+      startHost(`${HOST_PREFIX}-${randomId()}`);
+      return;
+    }
     $("#host-status").textContent = "Host มีปัญหา";
     toast(error.message || "สร้าง Host ไม่สำเร็จ");
   });
 }
 
-function connectToHost(peerId) {
+function connectToHost(peerId, { silent = false } = {}) {
   if (!peerId) return toast("กรุณากรอก Host ID");
   if (state.cashierPeer) state.cashierPeer.destroy();
+  window.clearTimeout(state.reconnectTimer);
 
   $("#cashier-status").textContent = "กำลังเชื่อมต่อ...";
   state.cashierPeer = new Peer(undefined, { debug: 1 });
   state.cashierPeer.on("open", () => {
     state.hostConn = state.cashierPeer.connect(peerId, { reliable: true });
     state.hostConn.on("open", () => {
+      rememberHostConnection(peerId);
       $("#cashier-status").textContent = "เชื่อมต่อแล้ว";
-      toast("เชื่อมต่อเครื่องแม่แล้ว");
+      if (!silent) toast("เชื่อมต่อเครื่องแม่แล้ว");
       state.hostConn.send({ type: "hello" });
     });
     state.hostConn.on("data", handleCashierMessage);
     state.hostConn.on("close", () => {
       $("#cashier-status").textContent = "หลุดการเชื่อมต่อ";
+      scheduleHostReconnect();
     });
   });
   state.cashierPeer.on("error", (error) => {
     $("#cashier-status").textContent = "เชื่อมต่อไม่สำเร็จ";
-    toast(error.message || "เชื่อมต่อเครื่องแม่ไม่สำเร็จ");
+    if (!silent) toast(error.message || "เชื่อมต่อเครื่องแม่ไม่สำเร็จ");
+    scheduleHostReconnect();
   });
+}
+
+function rememberHostConnection(peerId) {
+  state.lastHostId = peerId;
+  localStorage.setItem(LAST_HOST_ID_KEY, peerId);
+  $("#manual-host-id").value = peerId;
+}
+
+function reconnectLastHost() {
+  if (!state.lastHostId) return;
+  window.setTimeout(() => connectToHost(state.lastHostId, { silent: true }), 700);
+}
+
+function scheduleHostReconnect() {
+  if (!state.lastHostId) return;
+  window.clearTimeout(state.reconnectTimer);
+  state.reconnectTimer = window.setTimeout(() => {
+    if (!state.hostConn?.open) connectToHost(state.lastHostId, { silent: true });
+  }, 5000);
 }
 
 function handleHostMessage(message, conn) {
