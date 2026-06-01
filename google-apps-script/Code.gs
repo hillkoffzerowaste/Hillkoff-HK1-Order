@@ -1,10 +1,12 @@
 const STORE_SHEET = "Store";
 const ORDERS_SHEET = "Orders";
 const PRODUCTS_SHEET = "Products";
+const SETTINGS_SHEET = "Settings";
 
 function doGet(event) {
   const action = event.parameter.action || "loadStore";
   if (action === "loadStore") return jsonResponse({ status: "ok", store: loadStore() });
+  if (action === "loadSettings") return jsonResponse({ status: "ok", settings: loadSettings() });
   return jsonResponse({ status: "error", message: "Unknown action" });
 }
 
@@ -14,14 +16,56 @@ function doPost(event) {
     saveStore(payload.store || {});
     return jsonResponse({ status: "ok", updatedAt: payload.store && payload.store.updatedAt });
   }
+  if (payload.action === "appendOrder") {
+    const store = appendOrder(payload.order || {}, payload.products || []);
+    return jsonResponse({ status: "ok", store: store, updatedAt: store.updatedAt });
+  }
+  if (payload.action === "saveSettings") {
+    saveSettings(payload.settings || {});
+    return jsonResponse({ status: "ok", settings: loadSettings() });
+  }
   return jsonResponse({ status: "error", message: "Unknown action" });
 }
 
 function loadStore() {
-  const sheet = ensureSheet(STORE_SHEET, ["key", "payload", "updatedAt"]);
+  const sheet = ensureSheet(STORE_SHEET, ["key", "payload", "updatedAt", "webAppUrl"]);
   const payload = sheet.getRange(2, 2).getValue();
   if (!payload) return null;
   return JSON.parse(payload);
+}
+
+function loadSettings() {
+  const settings = {};
+  const sheet = ensureSheet(SETTINGS_SHEET, ["key", "value"]);
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.getRange(2, 1, lastRow - 1, 2).getValues().forEach((row) => {
+      if (row[0]) settings[row[0]] = row[1];
+    });
+  }
+  const storeSheet = ensureSheet(STORE_SHEET, ["key", "payload", "updatedAt", "webAppUrl"]);
+  const storeWebAppUrl = storeSheet.getRange(2, 4).getValue();
+  if (storeWebAppUrl && !settings.webAppUrl) settings.webAppUrl = storeWebAppUrl;
+  return settings;
+}
+
+function saveSettings(settings) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const current = loadSettings();
+    const next = Object.assign({}, current, settings || {});
+    const sheet = ensureSheet(SETTINGS_SHEET, ["key", "value"]);
+    clearBody(sheet);
+    const rows = Object.keys(next)
+      .filter((key) => next[key] !== undefined && next[key] !== null && next[key] !== "")
+      .sort()
+      .map((key) => [key, next[key]]);
+    if (rows.length) sheet.getRange(2, 1, rows.length, 2).setValues(rows);
+    writeStoreWebAppUrl(next.webAppUrl || "");
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function saveStore(store) {
@@ -36,9 +80,49 @@ function saveStore(store) {
   }
 }
 
+function appendOrder(order, products) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const store = loadStore() || { products: [], orders: [], updatedAt: 0 };
+    store.products = mergeProducts(store.products || [], products || []);
+    store.orders = store.orders || [];
+    if (order.id && !store.orders.some((item) => item.id === order.id)) {
+      store.orders.unshift(order);
+    }
+    store.updatedAt = Date.now();
+    writeStore(store);
+    writeOrders(store.orders);
+    writeProducts(store.products);
+    return store;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function mergeProducts(currentProducts, newProducts) {
+  const map = {};
+  currentProducts.concat(newProducts).forEach((product) => {
+    if (!product || !product.name) return;
+    map[String(product.name).trim().toLowerCase()] = {
+      name: product.name,
+      size: Number(product.size || 500),
+    };
+  });
+  return Object.keys(map)
+    .sort()
+    .map((key) => map[key]);
+}
+
 function writeStore(store) {
-  const sheet = ensureSheet(STORE_SHEET, ["key", "payload", "updatedAt"]);
-  sheet.getRange(2, 1, 1, 3).setValues([["main", JSON.stringify(store), store.updatedAt || Date.now()]]);
+  const sheet = ensureSheet(STORE_SHEET, ["key", "payload", "updatedAt", "webAppUrl"]);
+  const settings = loadSettings();
+  sheet.getRange(2, 1, 1, 4).setValues([["main", JSON.stringify(store), store.updatedAt || Date.now(), settings.webAppUrl || ""]]);
+}
+
+function writeStoreWebAppUrl(webAppUrl) {
+  const sheet = ensureSheet(STORE_SHEET, ["key", "payload", "updatedAt", "webAppUrl"]);
+  sheet.getRange(2, 4).setValue(webAppUrl || "");
 }
 
 function writeOrders(orders) {
