@@ -93,6 +93,7 @@
               <label>
                 ขนาดถุง
                 <select id="bag-size">
+                  <option value="200">200g</option>
                   <option value="250">250g</option>
                   <option value="500" selected>500g</option>
                   <option value="1000">1000g</option>
@@ -164,12 +165,26 @@
                 <span>เวลาบดรวม</span>
                 <strong id="report-minutes">0 นาที</strong>
               </div>
+              <div class="glass metric">
+                <span>แจ้งปัญหา</span>
+                <strong id="report-issues">0</strong>
+              </div>
+            </div>
+
+            <div class="issue-form">
+              <label>
+                แจ้งปัญหาประจำวัน
+                <textarea id="issue-message" placeholder="เช่น ออเดอร์ผิด, ลูกค้าเปลี่ยนขนาดถุง, เครื่องบดมีปัญหา"></textarea>
+              </label>
+              <button id="send-issue" class="btn secondary" type="button">ส่งแจ้งปัญหา</button>
             </div>
 
             <div class="report-actions">
               <button id="copy-report" class="btn secondary">คัดลอกรายงาน</button>
               <button id="export-report" class="btn primary">ส่งออก Excel</button>
             </div>
+
+            <div id="issue-list" class="issue-list"></div>
 
             <div class="report-table-wrap">
               <table class="report-table">

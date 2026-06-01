@@ -290,7 +290,8 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   min-height: var(--tap);
   padding: 0 0.95rem;
@@ -303,12 +304,21 @@ select {
   box-shadow: inset 0 1px 2px rgba(60, 64, 67, 0.06);
 }
 
-input::placeholder {
+textarea {
+  min-height: 6.5rem;
+  padding-top: 0.8rem;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+input::placeholder,
+textarea::placeholder {
   color: var(--subtle);
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: var(--blue);
   box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.16);
 }
@@ -557,6 +567,8 @@ select:focus {
 }
 
 .order-actions {
+  display: grid;
+  gap: 0.5rem;
   margin-top: 0.75rem;
 }
 
@@ -567,6 +579,14 @@ select:focus {
 
 .order-action:hover {
   background: #137333;
+}
+
+.order-action.danger {
+  background: var(--red);
+}
+
+.order-action.danger:hover {
+  background: #c5221f;
 }
 
 .order-form,
@@ -659,6 +679,36 @@ select:focus {
 .report-actions .btn.primary {
   width: auto;
   min-height: var(--tap);
+}
+
+.issue-form {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.issue-form .btn {
+  justify-self: start;
+  min-width: 10rem;
+}
+
+.issue-list {
+  display: grid;
+  gap: 0.55rem;
+  margin: 1rem 0;
+}
+
+.issue-item {
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, #fff, #f8fafd);
+}
+
+.issue-item strong {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--blue);
 }
 
 .report-date {

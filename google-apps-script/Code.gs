@@ -1,6 +1,7 @@
 const STORE_SHEET = "Store";
 const ORDERS_SHEET = "Orders";
 const PRODUCTS_SHEET = "Products";
+const ISSUES_SHEET = "Issues";
 const SETTINGS_SHEET = "Settings";
 
 function doGet(event) {
@@ -18,6 +19,10 @@ function doPost(event) {
   }
   if (payload.action === "appendOrder") {
     const store = appendOrder(payload.order || {}, payload.products || []);
+    return jsonResponse({ status: "ok", store: store, updatedAt: store.updatedAt });
+  }
+  if (payload.action === "appendIssue") {
+    const store = appendIssue(payload.issue || {});
     return jsonResponse({ status: "ok", store: store, updatedAt: store.updatedAt });
   }
   if (payload.action === "saveSettings") {
@@ -75,6 +80,7 @@ function saveStore(store) {
     writeStore(store);
     writeOrders(store.orders || []);
     writeProducts(store.products || []);
+    writeIssues(store.issues || []);
   } finally {
     lock.releaseLock();
   }
@@ -84,9 +90,10 @@ function appendOrder(order, products) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    const store = loadStore() || { products: [], orders: [], updatedAt: 0 };
+    const store = loadStore() || { products: [], orders: [], issues: [], updatedAt: 0 };
     store.products = mergeProducts(store.products || [], products || []);
     store.orders = store.orders || [];
+    store.issues = store.issues || [];
     if (order.id && !store.orders.some((item) => item.id === order.id)) {
       store.orders.unshift(order);
     }
@@ -94,6 +101,29 @@ function appendOrder(order, products) {
     writeStore(store);
     writeOrders(store.orders);
     writeProducts(store.products);
+    writeIssues(store.issues);
+    return store;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function appendIssue(issue) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const store = loadStore() || { products: [], orders: [], issues: [], updatedAt: 0 };
+    store.products = store.products || [];
+    store.orders = store.orders || [];
+    store.issues = store.issues || [];
+    if (issue.id && !store.issues.some((item) => item.id === issue.id)) {
+      store.issues.unshift(issue);
+    }
+    store.updatedAt = Date.now();
+    writeStore(store);
+    writeOrders(store.orders);
+    writeProducts(store.products);
+    writeIssues(store.issues);
     return store;
   } finally {
     lock.releaseLock();
@@ -138,7 +168,9 @@ function writeOrders(orders) {
     "qty",
     "grind",
     "customer",
+    "issueNote",
     "doneAt",
+    "canceledAt",
   ]);
   clearBody(sheet);
   if (!orders.length) return;
@@ -154,7 +186,23 @@ function writeOrders(orders) {
     order.qty || "",
     order.grind || "",
     order.customer || "",
+    order.issueNote || "",
     order.doneAt || "",
+    order.canceledAt || "",
+  ]);
+  sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+}
+
+function writeIssues(issues) {
+  const sheet = ensureSheet(ISSUES_SHEET, ["id", "createdAt", "date", "time", "issue"]);
+  clearBody(sheet);
+  if (!issues.length) return;
+  const rows = issues.map((issue) => [
+    issue.id || "",
+    issue.createdAt || "",
+    formatDate(issue.createdAt),
+    formatTime(issue.createdAt),
+    issue.message || "",
   ]);
   sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
 }

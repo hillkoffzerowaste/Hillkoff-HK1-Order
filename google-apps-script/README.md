@@ -15,4 +15,6 @@ New orders are appended through the `appendOrder` action, which loads the curren
 
 The `Settings` sheet stores shared app settings such as `webAppUrl`. The same value is also written to the `webAppUrl` column in the `Store` sheet. Devices that already have an older working Web app URL can read this central value and automatically switch to the latest URL.
 
+Issues submitted from the daily report page are saved through the `appendIssue` action. They are kept in the JSON snapshot and written to the `Issues` sheet with `date`, `time`, and `issue` columns. The `Orders` sheet also includes an `issueNote` column for future order-level notes.
+
 When updating `Code.gs`, go to Deploy > Manage deployments, edit the existing Web app deployment, choose New version, and deploy again.

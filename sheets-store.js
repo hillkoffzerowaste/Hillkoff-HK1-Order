@@ -44,6 +44,15 @@ export function createCloudStore(env = import.meta.env) {
     return result.store || null;
   }
 
+  async function appendIssue(issue) {
+    if (!enabled) return null;
+    const response = await postJson({ action: "appendIssue", issue });
+    if (!response.ok) throw new Error(`Sheets issue append failed: ${response.status}`);
+    const result = await response.json();
+    if (result.status !== "ok") throw new Error(result.message || "Sheets issue append failed");
+    return result.store || null;
+  }
+
   async function saveSettings(settings) {
     if (!enabled) return false;
     const response = await postJson({ action: "saveSettings", settings });
@@ -79,5 +88,5 @@ export function createCloudStore(env = import.meta.env) {
     pollTimer = null;
   }
 
-  return { enabled, config, load, save, appendOrder, loadSettings, saveSettings, startPolling, stopPolling };
+  return { enabled, config, load, save, appendOrder, appendIssue, loadSettings, saveSettings, startPolling, stopPolling };
 }

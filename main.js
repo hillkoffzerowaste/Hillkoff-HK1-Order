@@ -1,7 +1,7 @@
 import { createCloudStore } from "./sheets-store.js";
 
 const SHEETS_URL_KEY = "hk1-sheets-web-app-url";
-const WAIT_MINUTES = { 250: 1, 500: 2, 1000: 4 };
+const WAIT_MINUTES = { 200: 1, 250: 1, 500: 2, 1000: 4 };
 
 const defaultStore = {
   products: [
@@ -10,6 +10,7 @@ const defaultStore = {
     { name: "Hillkoff Arabica 100%", size: 250 },
   ],
   orders: [],
+  issues: [],
   updatedAt: 0,
 };
 
@@ -147,6 +148,7 @@ function bindReport() {
   });
   $("#copy-report").addEventListener("click", copyDailyReport);
   $("#export-report").addEventListener("click", exportDailyReport);
+  $("#send-issue").addEventListener("click", sendIssue);
 }
 
 async function sendOrder() {
@@ -199,6 +201,39 @@ function createQueuedOrder(orderPayload) {
   return order;
 }
 
+async function sendIssue() {
+  const message = $("#issue-message").value.trim();
+  if (!message) return toast("กรุณากรอกปัญหาที่ต้องการบันทึก");
+
+  const issue = {
+    id: crypto.randomUUID(),
+    createdAt: Date.now(),
+    message,
+  };
+  state.store.issues.unshift(issue);
+  saveStore({ syncCloud: false });
+
+  if (state.cloudStore?.enabled) {
+    try {
+      renderCloudStatus("กำลังบันทึกปัญหา", "กำลังส่งแจ้งปัญหาเข้า Google Sheets");
+      const remoteStore = await state.cloudStore.appendIssue(issue);
+      if (remoteStore) {
+        state.store = migrateStore(remoteStore);
+        saveStore({ syncCloud: false, touch: false });
+      }
+      renderCloudStatus("ออนไลน์พร้อมใช้", `ซิงก์ล่าสุด ${formatTime(Date.now())}`);
+    } catch (error) {
+      toast("บันทึกปัญหาออนไลน์ไม่สำเร็จ");
+      renderCloudStatus("ซิงก์มีปัญหา", error.message || "ส่งแจ้งปัญหาเข้า Google Sheets ไม่สำเร็จ");
+      return;
+    }
+  }
+
+  $("#issue-message").value = "";
+  renderReport();
+  toast(state.cloudStore?.enabled ? "บันทึกปัญหาเข้า Sheets แล้ว" : "บันทึกปัญหาแล้ว");
+}
+
 function selectedGrind() {
   if ($("#grind").value === "custom") return $("#custom-grind").value.trim();
   return $("#grind").value;
@@ -233,6 +268,7 @@ function setOrderStatus(id, status) {
   if (!order) return;
   order.status = status;
   if (status === "done") order.doneAt = Date.now();
+  if (status === "canceled") order.canceledAt = Date.now();
   saveStore();
   renderAll();
 }
@@ -247,12 +283,12 @@ function renderHost() {
   const groups = {
     waiting: state.store.orders.filter((order) => order.status === "waiting"),
     grinding: state.store.orders.filter((order) => order.status === "grinding"),
-    done: state.store.orders.filter((order) => order.status === "done").slice(0, 20),
+    done: state.store.orders.filter((order) => order.status === "done" || order.status === "canceled").slice(0, 20),
   };
 
   $("#waiting-list").innerHTML = groups.waiting.map(orderCard).join("") || empty("ยังไม่มีออเดอร์ใหม่");
   $("#grinding-list").innerHTML = groups.grinding.map(orderCard).join("") || empty("ยังไม่มีงานกำลังบด");
-  $("#done-list").innerHTML = groups.done.map(orderCard).join("") || empty("ยังไม่มีออเดอร์เสร็จ");
+  $("#done-list").innerHTML = groups.done.map(orderCard).join("") || empty("ยังไม่มีออเดอร์เสร็จหรือยกเลิก");
 
   $("#count-waiting").textContent = groups.waiting.length;
   $("#count-grinding").textContent = groups.grinding.length;
@@ -265,7 +301,7 @@ function renderHost() {
 
 function renderCashier() {
   renderProductSuggestions();
-  const activeOrders = state.store.orders.filter((order) => order.status !== "done").slice(0, 10);
+  const activeOrders = state.store.orders.filter((order) => order.status !== "done" && order.status !== "canceled").slice(0, 10);
   $("#cashier-queue-list").innerHTML =
     activeOrders
       .map((order) => `<div class="mini-item"><strong>คิว ${order.queue}</strong><span>${order.name} - ${statusLabel(order.status)}</span></div>`)
@@ -288,6 +324,7 @@ function renderReport() {
   $("#report-orders").textContent = report.orders.length;
   $("#report-bags").textContent = report.totalBags;
   $("#report-minutes").textContent = `${report.totalMinutes} นาที`;
+  $("#report-issues").textContent = report.issues.length;
   $("#report-body").innerHTML =
     report.orders.map((order) => `
       <tr>
@@ -301,6 +338,14 @@ function renderReport() {
         <td>${escapeHtml(order.customer || "-")}</td>
       </tr>
     `).join("") || `<tr><td colspan="8">ยังไม่มีออเดอร์ในวันที่เลือก</td></tr>`;
+  $("#issue-list").innerHTML =
+    report.issues
+      .map((issue) => `
+        <div class="issue-item">
+          <strong>${formatTime(issue.createdAt)}</strong>
+          <span>${escapeHtml(issue.message)}</span>
+        </div>`)
+      .join("") || empty("ยังไม่มีแจ้งปัญหาของวันนี้");
 }
 
 async function copyDailyReport() {
@@ -337,6 +382,13 @@ function buildExcelHtml(report) {
       <td>${(WAIT_MINUTES[order.size] || 2) * Number(order.qty || 1)}</td>
     </tr>
   `).join("");
+  const issueRows = report.issues.map((issue) => `
+    <tr>
+      <td>${report.date}</td>
+      <td>${formatTime(issue.createdAt)}</td>
+      <td>${escapeHtml(issue.message)}</td>
+    </tr>
+  `).join("");
   return `
     <html>
       <head><meta charset="UTF-8" /></head>
@@ -347,6 +399,7 @@ function buildExcelHtml(report) {
           <tr><td>จำนวนออเดอร์</td><td>${report.orders.length}</td></tr>
           <tr><td>จำนวนถุงรวม</td><td>${report.totalBags}</td></tr>
           <tr><td>เวลาบดรวม (นาที)</td><td>${report.totalMinutes}</td></tr>
+          <tr><td>แจ้งปัญหา</td><td>${report.issues.length}</td></tr>
         </table>
         <br />
         <table border="1">
@@ -357,6 +410,11 @@ function buildExcelHtml(report) {
           </tr>
           ${rows || '<tr><td colspan="10">ไม่มีข้อมูล</td></tr>'}
         </table>
+        <br />
+        <table border="1">
+          <tr><th>วันที่</th><th>เวลา</th><th>แจ้งปัญหา</th></tr>
+          ${issueRows || '<tr><td colspan="3">ไม่มีแจ้งปัญหา</td></tr>'}
+        </table>
       </body>
     </html>
   `;
@@ -366,9 +424,12 @@ function buildDailyReport(dateKey) {
   const orders = state.store.orders
     .filter((order) => dateFromTimestamp(order.createdAt) === dateKey)
     .sort((a, b) => a.createdAt - b.createdAt);
+  const issues = (state.store.issues || [])
+    .filter((issue) => dateFromTimestamp(issue.createdAt) === dateKey)
+    .sort((a, b) => a.createdAt - b.createdAt);
   const totalBags = orders.reduce((sum, order) => sum + Number(order.qty || 0), 0);
   const totalMinutes = orders.reduce((sum, order) => sum + (WAIT_MINUTES[order.size] || 2) * Number(order.qty || 1), 0);
-  return { date: dateKey, orders, totalBags, totalMinutes };
+  return { date: dateKey, orders, issues, totalBags, totalMinutes };
 }
 
 function formatDailyReportText(report) {
@@ -377,10 +438,16 @@ function formatDailyReportText(report) {
     `จำนวนออเดอร์: ${report.orders.length}`,
     `จำนวนถุงรวม: ${report.totalBags}`,
     `เวลาบดรวม: ${report.totalMinutes} นาที`,
+    `แจ้งปัญหา: ${report.issues.length}`,
     "",
     ...report.orders.map((order) =>
       `${formatTime(order.createdAt)} | คิว ${order.queue} | ${order.name} | ${order.size}g x ${order.qty} | ${order.grind} | ${statusLabel(order.status)}`
     ),
+    "",
+    "แจ้งปัญหา",
+    ...(report.issues.length
+      ? report.issues.map((issue) => `${formatTime(issue.createdAt)} | ${issue.message}`)
+      : ["ไม่มีแจ้งปัญหา"]),
   ];
   return lines.join("\n");
 }
@@ -404,9 +471,16 @@ function formatDateLong(dateKey) {
 function orderCard(order) {
   const minutes = (WAIT_MINUTES[order.size] || 2) * order.qty;
   const actions = {
-    waiting: `<button class="order-action" data-id="${order.id}" data-status="grinding">เริ่มบด</button>`,
-    grinding: `<button class="order-action" data-id="${order.id}" data-status="done">ปิดออเดอร์</button>`,
+    waiting: `
+      <button class="order-action" data-id="${order.id}" data-status="grinding">เริ่มบด</button>
+      <button class="order-action danger" data-id="${order.id}" data-status="canceled">ยกเลิก</button>
+    `,
+    grinding: `
+      <button class="order-action" data-id="${order.id}" data-status="done">ปิดออเดอร์</button>
+      <button class="order-action danger" data-id="${order.id}" data-status="canceled">ยกเลิก</button>
+    `,
     done: "",
+    canceled: "",
   };
   return `
     <article class="order-card">
@@ -423,7 +497,7 @@ function orderCard(order) {
 
 function totalWait() {
   return state.store.orders
-    .filter((order) => order.status !== "done")
+    .filter((order) => order.status !== "done" && order.status !== "canceled")
     .reduce((sum, order) => sum + (WAIT_MINUTES[order.size] || 2) * Number(order.qty || 1), 0);
 }
 
@@ -446,7 +520,7 @@ function formatTime(timestamp) {
 }
 
 function statusLabel(status) {
-  return { waiting: "รอคิว", grinding: "กำลังบด", done: "เสร็จแล้ว" }[status] || status;
+  return { waiting: "รอคิว", grinding: "กำลังบด", done: "เสร็จแล้ว", canceled: "ยกเลิก" }[status] || status;
 }
 
 function saveStore({ syncCloud = true, touch = true } = {}) {
@@ -467,6 +541,13 @@ function migrateStore(store) {
       size: Number(product.size || 500),
     }));
   migrated.orders = migrated.orders || [];
+  migrated.issues = (migrated.issues || [])
+    .filter((issue) => issue?.message)
+    .map((issue) => ({
+      id: issue.id || crypto.randomUUID(),
+      createdAt: Number(issue.createdAt || Date.now()),
+      message: String(issue.message),
+    }));
   return migrated;
 }
 
@@ -606,6 +687,12 @@ function mergeStores(remoteStore, localStore) {
     if (key) productsByName.set(key, { ...(productsByName.get(key) || {}), ...product });
   });
   merged.products = [...productsByName.values()];
+  const issuesById = new Map((merged.issues || []).map((issue) => [issue.id, issue]));
+  (localStore.issues || []).forEach((issue) => {
+    if (!issue?.id) return;
+    issuesById.set(issue.id, { ...(issuesById.get(issue.id) || {}), ...issue });
+  });
+  merged.issues = [...issuesById.values()].sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
   return merged;
 }
 
