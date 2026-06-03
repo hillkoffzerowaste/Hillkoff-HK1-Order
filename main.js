@@ -18,7 +18,6 @@ const state = {
   clientId: crypto.randomUUID(),
   store: migrateStore(structuredClone(defaultStore)),
   cloudStore: null,
-  cloudSaveTimer: null,
   cloudUnsubscribe: null,
   installPrompt: null,
 };
@@ -33,7 +32,6 @@ function boot() {
   bindSectionTabs();
   bindCashier();
   bindReport();
-  bindCloudControls();
   bindInstallApp();
   registerServiceWorker();
   renderAll();
@@ -69,10 +67,6 @@ function bindCashier() {
   $("#product-name").addEventListener("change", syncProductFromName);
   bindGrindInput();
   $("#send-order").addEventListener("click", sendOrder);
-}
-
-function bindCloudControls() {
-  $("#cloud-sync-now")?.addEventListener("click", () => syncCloudNow({ force: true }));
 }
 
 function bindInstallApp() {
@@ -146,32 +140,35 @@ async function sendOrder() {
 
   if (!name) return toast("กรุณากรอกชื่อสินค้า");
   if (!grind) return toast("กรุณาเลือกหรือกรอกเบอร์บด");
+  if (!state.cloudStore?.enabled) {
+    renderCloudStatus("ฐานข้อมูลยังไม่พร้อม", "ยังเชื่อมต่อ Supabase ไม่สำเร็จ");
+    return toast("ฐานข้อมูลยังไม่พร้อม");
+  }
 
   rememberProduct(name, size);
   const order = createQueuedOrder({ name, size, qty, grind, customer });
-  saveStore({ syncCloud: false });
+  saveStore();
 
-  if (state.cloudStore?.enabled) {
-    try {
-      renderCloudStatus("กำลังบันทึกออเดอร์", "กำลังส่งออเดอร์เข้า Supabase");
-      const remoteStore = await state.cloudStore.appendOrder(order, state.store.products, state.store);
-      if (remoteStore) {
-        state.store = migrateStore(remoteStore);
-        saveStore({ syncCloud: false, touch: false });
-      }
-      renderCloudStatus("ออนไลน์พร้อมใช้", `ซิงก์ล่าสุด ${formatTime(Date.now())}`);
-    } catch (error) {
-      toast("บันทึกออนไลน์ไม่สำเร็จ");
-      renderCloudStatus("ซิงก์มีปัญหา", error.message || "ส่งออเดอร์เข้า Supabase ไม่สำเร็จ");
-      return;
+  try {
+    renderCloudStatus("กำลังบันทึกออเดอร์", "กำลังส่งออเดอร์เข้า Supabase");
+    const remoteStore = await state.cloudStore.appendOrder(order, state.store.products, state.store);
+    if (remoteStore) {
+      state.store = migrateStore(remoteStore);
+      saveStore({ touch: false });
     }
+    renderCloudStatus("ฐานข้อมูลพร้อมใช้งาน", `บันทึกล่าสุด ${formatTime(Date.now())}`);
+  } catch (error) {
+    removeOrder(order.id);
+    toast("บันทึกฐานข้อมูลไม่สำเร็จ");
+    renderCloudStatus("ฐานข้อมูลมีปัญหา", error.message || "ส่งออเดอร์เข้า Supabase ไม่สำเร็จ");
+    return;
   }
 
   $("#product-name").value = "";
   $("#customer").value = "";
   $("#qty").value = 1;
   renderAll();
-  toast(state.cloudStore?.enabled ? "บันทึกออเดอร์เข้า Supabase แล้ว" : "บันทึกออเดอร์แล้ว");
+  toast("บันทึกออเดอร์เข้า Supabase แล้ว");
 }
 
 function createQueuedOrder(orderPayload) {
@@ -188,6 +185,12 @@ function createQueuedOrder(orderPayload) {
   return order;
 }
 
+function removeOrder(id) {
+  state.store.orders = state.store.orders.filter((order) => order.id !== id);
+  saveStore();
+  renderAll();
+}
+
 async function sendIssue() {
   const message = $("#issue-message").value.trim();
   if (!message) return toast("กรุณากรอกปัญหาที่ต้องการบันทึก");
@@ -198,27 +201,38 @@ async function sendIssue() {
     message,
   };
   state.store.issues.unshift(issue);
-  saveStore({ syncCloud: false });
+  saveStore();
 
-  if (state.cloudStore?.enabled) {
-    try {
-      renderCloudStatus("กำลังบันทึกปัญหา", "กำลังส่งแจ้งปัญหาเข้า Supabase");
-      const remoteStore = await state.cloudStore.appendIssue(issue, state.store);
-      if (remoteStore) {
-        state.store = migrateStore(remoteStore);
-        saveStore({ syncCloud: false, touch: false });
-      }
-      renderCloudStatus("ออนไลน์พร้อมใช้", `ซิงก์ล่าสุด ${formatTime(Date.now())}`);
-    } catch (error) {
-      toast("บันทึกปัญหาออนไลน์ไม่สำเร็จ");
-      renderCloudStatus("ซิงก์มีปัญหา", error.message || "ส่งแจ้งปัญหาเข้า Supabase ไม่สำเร็จ");
-      return;
+  if (!state.cloudStore?.enabled) {
+    removeIssue(issue.id);
+    renderCloudStatus("ฐานข้อมูลยังไม่พร้อม", "ยังเชื่อมต่อ Supabase ไม่สำเร็จ");
+    return toast("ฐานข้อมูลยังไม่พร้อม");
+  }
+
+  try {
+    renderCloudStatus("กำลังบันทึกปัญหา", "กำลังส่งแจ้งปัญหาเข้า Supabase");
+    const remoteStore = await state.cloudStore.appendIssue(issue, state.store);
+    if (remoteStore) {
+      state.store = migrateStore(remoteStore);
+      saveStore({ touch: false });
     }
+    renderCloudStatus("ฐานข้อมูลพร้อมใช้งาน", `บันทึกล่าสุด ${formatTime(Date.now())}`);
+  } catch (error) {
+    removeIssue(issue.id);
+    toast("บันทึกปัญหาลงฐานข้อมูลไม่สำเร็จ");
+    renderCloudStatus("ฐานข้อมูลมีปัญหา", error.message || "ส่งแจ้งปัญหาเข้า Supabase ไม่สำเร็จ");
+    return;
   }
 
   $("#issue-message").value = "";
   renderReport();
-  toast(state.cloudStore?.enabled ? "บันทึกปัญหาเข้า Supabase แล้ว" : "บันทึกปัญหาแล้ว");
+  toast("บันทึกปัญหาเข้า Supabase แล้ว");
+}
+
+function removeIssue(id) {
+  state.store.issues = state.store.issues.filter((issue) => issue.id !== id);
+  saveStore();
+  renderReport();
 }
 
 function selectedGrind() {
@@ -253,18 +267,28 @@ function normalizeProductName(name = "") {
 async function setOrderStatus(id, status) {
   const order = state.store.orders.find((item) => item.id === id);
   if (!order) return;
+  const previousOrder = { ...order };
   order.status = status;
   if (status === "done") order.doneAt = Date.now();
   if (status === "canceled") order.canceledAt = Date.now();
-  saveStore({ syncCloud: false });
+  saveStore();
   renderAll();
-  if (!state.cloudStore?.enabled) return;
+  if (!state.cloudStore?.enabled) {
+    Object.assign(order, previousOrder);
+    saveStore();
+    renderAll();
+    renderCloudStatus("ฐานข้อมูลยังไม่พร้อม", "ยังเชื่อมต่อ Supabase ไม่สำเร็จ");
+    return toast("ฐานข้อมูลยังไม่พร้อม");
+  }
   try {
     await state.cloudStore.upsertOrder(order, state.store);
-    renderCloudStatus("ออนไลน์พร้อมใช้", `ซิงก์ล่าสุด ${formatTime(Date.now())}`);
+    renderCloudStatus("ฐานข้อมูลพร้อมใช้งาน", `อัปเดตล่าสุด ${formatTime(Date.now())}`);
   } catch (error) {
-    renderCloudStatus("ซิงก์มีปัญหา", error.message || "อัปเดตสถานะออเดอร์ใน Supabase ไม่สำเร็จ");
-    toast("อัปเดตสถานะออนไลน์ไม่สำเร็จ");
+    Object.assign(order, previousOrder);
+    saveStore();
+    renderAll();
+    renderCloudStatus("ฐานข้อมูลมีปัญหา", error.message || "อัปเดตสถานะออเดอร์ใน Supabase ไม่สำเร็จ");
+    toast("อัปเดตสถานะลงฐานข้อมูลไม่สำเร็จ");
   }
 }
 
@@ -518,9 +542,8 @@ function statusLabel(status) {
   return { waiting: "รอคิว", grinding: "กำลังบด", done: "เสร็จแล้ว", canceled: "ยกเลิก" }[status] || status;
 }
 
-function saveStore({ syncCloud = true, touch = true } = {}) {
+function saveStore({ touch = true } = {}) {
   if (touch) state.store.updatedAt = Date.now();
-  if (syncCloud) scheduleCloudSave();
 }
 
 function migrateStore(store) {
@@ -550,7 +573,7 @@ function initCloudSync() {
   state.cloudUnsubscribe?.();
   state.cloudStore?.stopRealtime?.();
   state.cloudStore = createCloudStore();
-  renderCloudStatus("ยังไม่ได้ตั้งค่า", "ตั้งค่า VITE_SUPABASE_URL และ VITE_SUPABASE_ANON_KEY ในไฟล์ .env เพื่อเริ่มซิงก์ออนไลน์");
+  renderCloudStatus("ฐานข้อมูลยังไม่พร้อม", "กำลังเตรียมการเชื่อมต่อฐานข้อมูล Supabase");
 
   if (!state.cloudStore.enabled) return;
 
@@ -565,60 +588,22 @@ async function connectCloudStore() {
     onOrderChange: handleRemoteOrder,
     onIssueChange: handleRemoteIssue,
     onError: (error) => {
-      renderCloudStatus("ซิงก์มีปัญหา", error.message || "ตรวจ Supabase ไม่สำเร็จ");
+      renderCloudStatus("ฐานข้อมูลมีปัญหา", error.message || "ตรวจ Supabase ไม่สำเร็จ");
     },
   });
 }
 
 async function loadCloudStore() {
   try {
-    renderCloudStatus("กำลังโหลดข้อมูล", "กำลังดึงข้อมูลล่าสุดจาก Supabase");
+    renderCloudStatus("กำลังโหลดข้อมูล", "กำลังอ่านข้อมูลล่าสุดจาก Supabase");
     const remoteStore = await state.cloudStore.load();
     if (remoteStore) {
       handleRemoteStore(remoteStore, { force: true });
       return;
     }
-    renderCloudStatus("ออนไลน์พร้อมใช้", "ยังไม่มีข้อมูลใน Supabase");
+    renderCloudStatus("ฐานข้อมูลพร้อมใช้งาน", "ยังไม่มีข้อมูลใน Supabase");
   } catch (error) {
-    renderCloudStatus("ซิงก์มีปัญหา", error.message || "โหลดข้อมูล Supabase ไม่สำเร็จ");
-  }
-}
-
-function scheduleCloudSave() {
-  if (!state.cloudStore?.enabled) return;
-  window.clearTimeout(state.cloudSaveTimer);
-  state.cloudSaveTimer = window.setTimeout(() => syncCloudNow(), 1200);
-}
-
-async function syncCloudNow({ force = false } = {}) {
-  if (!state.cloudStore?.enabled) {
-    renderCloudStatus("ยังไม่ได้ตั้งค่า", "ตั้งค่า VITE_SUPABASE_URL และ VITE_SUPABASE_ANON_KEY ในไฟล์ .env ก่อนใช้งานออนไลน์");
-    return;
-  }
-
-  try {
-    if (force) {
-      renderCloudStatus("กำลังตรวจข้อมูล", "กำลังเทียบข้อมูลในเครื่องกับ Supabase");
-      const remoteStore = await state.cloudStore.load();
-      if (remoteStore) {
-        handleRemoteStore(remoteStore, { force: true });
-        return;
-      }
-      if (!state.store.orders.length && !state.store.products.length) {
-        renderCloudStatus("ออนไลน์พร้อมใช้", "ยังไม่มีข้อมูลใน Supabase");
-        return;
-      }
-    }
-
-    renderCloudStatus("กำลังซิงก์", "กำลังบันทึกข้อมูลขึ้น Supabase");
-    const mergedStore = migrateStore(state.store);
-    mergedStore.updatedAt = Date.now();
-    await state.cloudStore.save(mergedStore);
-    state.store = migrateStore(mergedStore);
-    saveStore({ syncCloud: false, touch: false });
-    renderCloudStatus("ออนไลน์พร้อมใช้", `ซิงก์ล่าสุด ${formatTime(Date.now())}`);
-  } catch (error) {
-    renderCloudStatus("ซิงก์มีปัญหา", error.message || "บันทึก Supabase ไม่สำเร็จ");
+    renderCloudStatus("ฐานข้อมูลมีปัญหา", error.message || "โหลดข้อมูล Supabase ไม่สำเร็จ");
   }
 }
 
@@ -628,12 +613,12 @@ function handleRemoteStore(remoteStore, { force = false } = {}) {
 
   const knownOrderIds = new Set((state.store.orders || []).map((order) => order.id));
   state.store = remote;
-  saveStore({ syncCloud: false, touch: false });
+  saveStore({ touch: false });
   renderAll();
   remote.orders
     .filter((order) => !knownOrderIds.has(order.id) && order.sourceClientId !== state.clientId)
     .forEach(notifyIncomingOrder);
-  renderCloudStatus("รับข้อมูลออนไลน์แล้ว", `อัปเดตล่าสุด ${formatTime(remote.updatedAt)}`);
+  renderCloudStatus("รับข้อมูลจากฐานข้อมูลแล้ว", `อัปเดตล่าสุด ${formatTime(remote.updatedAt)}`);
   return true;
 }
 
@@ -645,7 +630,7 @@ function handleRemoteOrder(order, { eventType } = {}) {
   state.store.orders = [...ordersById.values()].sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
   rememberProduct(order.name, order.size);
   state.store.updatedAt = Math.max(Number(state.store.updatedAt || 0), Number(order.updatedAt || order.createdAt || Date.now()));
-  saveStore({ syncCloud: false, touch: false });
+  saveStore({ touch: false });
   renderAll();
   if (!existed && eventType === "INSERT") notifyIncomingOrder(order);
   renderCloudStatus("รับออเดอร์ใหม่แล้ว", `อัปเดตล่าสุด ${formatTime(Date.now())}`);
@@ -657,7 +642,7 @@ function handleRemoteIssue(issue) {
   const issuesById = new Map((state.store.issues || []).map((item) => [item.id, item]));
   issuesById.set(issue.id, { ...(issuesById.get(issue.id) || {}), ...issue });
   state.store.issues = [...issuesById.values()].sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
-  saveStore({ syncCloud: false, touch: false });
+  saveStore({ touch: false });
   renderReport();
   return true;
 }
