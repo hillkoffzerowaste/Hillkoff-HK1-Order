@@ -1,5 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 
+const DEFAULT_SUPABASE_URL = "https://jerggqygfojqqenazqqt.supabase.co";
+const DEFAULT_SUPABASE_KEY = "sb_publishable_DxnczUIpmEWlvN_pQCcnuA_plV6IjOw";
+
 const TABLES = {
   store: "hk_app_store",
   orders: "hk_orders",
@@ -9,9 +12,8 @@ const TABLES = {
 
 export function createCloudStore(env = import.meta.env) {
   const config = {
-    url: env.VITE_SUPABASE_URL || "",
-    key: env.VITE_SUPABASE_ANON_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY || "",
-    pollMs: Number(env.VITE_SUPABASE_POLL_MS || 15000),
+    url: env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL,
+    key: env.VITE_SUPABASE_ANON_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY || DEFAULT_SUPABASE_KEY,
   };
   const enabled = Boolean(config.url && config.key);
   const client = enabled
@@ -19,7 +21,7 @@ export function createCloudStore(env = import.meta.env) {
         auth: { persistSession: false, autoRefreshToken: false },
       })
     : null;
-  let pollTimer = null;
+  let channel = null;
 
   async function load() {
     if (!enabled) return null;
@@ -33,7 +35,7 @@ export function createCloudStore(env = import.meta.env) {
     return withUpdatedAt(data.payload, data.updated_at);
   }
 
-  async function save(store) {
+  async function save(store, { syncRows = true } = {}) {
     if (!enabled) return false;
     const normalized = withUpdatedAt(store, store?.updatedAt || Date.now());
     const { error } = await client.from(TABLES.store).upsert(
@@ -46,59 +48,63 @@ export function createCloudStore(env = import.meta.env) {
       { onConflict: "id" }
     );
     if (error) throw error;
-    await syncReportTables(normalized);
+    if (syncRows) await syncReportTables(normalized);
     return true;
   }
 
-  async function appendOrder(order, products = []) {
+  async function appendOrder(order, products = [], store = null) {
     if (!enabled) return null;
-    const store = await loadStoreForAppend();
-    const ordersById = new Map((store.orders || []).map((item) => [item.id, item]));
-    ordersById.set(order.id, { ...(ordersById.get(order.id) || {}), ...order });
-    store.orders = [...ordersById.values()].sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
-    store.products = mergeProducts(store.products, products);
-    store.updatedAt = Date.now();
-    await save(store);
-    return store;
+    const updatedAt = Number(store?.updatedAt || Date.now());
+    await Promise.all([
+      upsertRows(TABLES.orders, [orderRow(updatedAt)(order)]),
+      upsertRows(TABLES.products, (products || []).filter((item) => item?.name).map(productRow(updatedAt))),
+      store ? save(withUpdatedAt(store, updatedAt), { syncRows: false }) : Promise.resolve(false),
+    ]);
+    return store ? withUpdatedAt(store, updatedAt) : null;
   }
 
-  async function appendIssue(issue) {
+  async function appendIssue(issue, store = null) {
     if (!enabled) return null;
-    const store = await loadStoreForAppend();
-    const issuesById = new Map((store.issues || []).map((item) => [item.id, item]));
-    issuesById.set(issue.id, { ...(issuesById.get(issue.id) || {}), ...issue });
-    store.issues = [...issuesById.values()].sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
-    store.updatedAt = Date.now();
-    await save(store);
-    return store;
+    const updatedAt = Number(store?.updatedAt || Date.now());
+    await Promise.all([
+      upsertRows(TABLES.issues, [issueRow(updatedAt)(issue)]),
+      store ? save(withUpdatedAt(store, updatedAt), { syncRows: false }) : Promise.resolve(false),
+    ]);
+    return store ? withUpdatedAt(store, updatedAt) : null;
   }
 
-  function startPolling(onRemoteStore, onError) {
-    if (!enabled || pollTimer) return () => {};
-    pollTimer = window.setInterval(async () => {
-      try {
-        const remoteStore = await load();
-        if (remoteStore) onRemoteStore(remoteStore);
-      } catch (error) {
-        onError?.(error);
-      }
-    }, config.pollMs);
-    return stopPolling;
+  async function upsertOrder(order, store = null) {
+    if (!enabled) return null;
+    const updatedAt = Number(store?.updatedAt || Date.now());
+    await Promise.all([
+      upsertRows(TABLES.orders, [orderRow(updatedAt)(order)]),
+      store ? save(withUpdatedAt(store, updatedAt), { syncRows: false }) : Promise.resolve(false),
+    ]);
+    return store ? withUpdatedAt(store, updatedAt) : null;
   }
 
-  function stopPolling() {
-    if (pollTimer) window.clearInterval(pollTimer);
-    pollTimer = null;
+  function startRealtime({ onStoreChange, onOrderChange, onIssueChange, onError } = {}) {
+    if (!enabled || channel) return () => {};
+    channel = client
+      .channel("hk-app-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: TABLES.orders }, (payload) => {
+        const order = payload.new?.payload;
+        if (order) onOrderChange?.(order, { eventType: payload.eventType });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: TABLES.issues }, (payload) => {
+        const issue = payload.new?.payload;
+        if (issue) onIssueChange?.(issue, { eventType: payload.eventType });
+      })
+      .subscribe((status, error) => {
+        if (error) onError?.(error);
+        if (status === "CHANNEL_ERROR") onError?.(new Error("Supabase realtime channel error"));
+      });
+    return stopRealtime;
   }
 
-  async function loadStoreForAppend() {
-    const store = (await load()) || {};
-    return {
-      products: Array.isArray(store.products) ? store.products : [],
-      orders: Array.isArray(store.orders) ? store.orders : [],
-      issues: Array.isArray(store.issues) ? store.issues : [],
-      updatedAt: Number(store.updatedAt || 0),
-    };
+  function stopRealtime() {
+    if (channel) client.removeChannel(channel);
+    channel = null;
   }
 
   async function syncReportTables(store) {
@@ -115,24 +121,11 @@ export function createCloudStore(env = import.meta.env) {
     if (error) throw error;
   }
 
-  return { enabled, config, load, save, appendOrder, appendIssue, startPolling, stopPolling };
+  return { enabled, config, load, save, appendOrder, appendIssue, upsertOrder, startRealtime, stopRealtime };
 }
 
 function withUpdatedAt(store = {}, updatedAt = 0) {
   return { ...(store || {}), updatedAt: Number(updatedAt || store?.updatedAt || 0) };
-}
-
-function mergeProducts(remoteProducts = [], localProducts = []) {
-  const productsByName = new Map(remoteProducts.map((product) => [normalizeProductName(product.name), product]));
-  localProducts.forEach((product) => {
-    const key = normalizeProductName(product.name);
-    if (key) productsByName.set(key, { ...(productsByName.get(key) || {}), ...product });
-  });
-  return [...productsByName.values()];
-}
-
-function normalizeProductName(name = "") {
-  return String(name).trim().toLocaleLowerCase("th-TH");
 }
 
 function productRow(updatedAt) {

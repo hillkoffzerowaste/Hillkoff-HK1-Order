@@ -15,6 +15,7 @@ const defaultStore = {
 
 const state = {
   view: "host",
+  clientId: crypto.randomUUID(),
   store: migrateStore(structuredClone(defaultStore)),
   cloudStore: null,
   cloudSaveTimer: null,
@@ -153,7 +154,7 @@ async function sendOrder() {
   if (state.cloudStore?.enabled) {
     try {
       renderCloudStatus("กำลังบันทึกออเดอร์", "กำลังส่งออเดอร์เข้า Supabase");
-      const remoteStore = await state.cloudStore.appendOrder(order, state.store.products);
+      const remoteStore = await state.cloudStore.appendOrder(order, state.store.products, state.store);
       if (remoteStore) {
         state.store = migrateStore(remoteStore);
         saveStore({ syncCloud: false, touch: false });
@@ -179,6 +180,7 @@ function createQueuedOrder(orderPayload) {
     queue: nextQueue(),
     status: "waiting",
     createdAt: Date.now(),
+    sourceClientId: state.clientId,
     ...orderPayload,
   };
   rememberProduct(order.name, order.size);
@@ -201,7 +203,7 @@ async function sendIssue() {
   if (state.cloudStore?.enabled) {
     try {
       renderCloudStatus("กำลังบันทึกปัญหา", "กำลังส่งแจ้งปัญหาเข้า Supabase");
-      const remoteStore = await state.cloudStore.appendIssue(issue);
+      const remoteStore = await state.cloudStore.appendIssue(issue, state.store);
       if (remoteStore) {
         state.store = migrateStore(remoteStore);
         saveStore({ syncCloud: false, touch: false });
@@ -248,14 +250,22 @@ function normalizeProductName(name = "") {
   return String(name).trim().toLocaleLowerCase("th-TH");
 }
 
-function setOrderStatus(id, status) {
+async function setOrderStatus(id, status) {
   const order = state.store.orders.find((item) => item.id === id);
   if (!order) return;
   order.status = status;
   if (status === "done") order.doneAt = Date.now();
   if (status === "canceled") order.canceledAt = Date.now();
-  saveStore();
+  saveStore({ syncCloud: false });
   renderAll();
+  if (!state.cloudStore?.enabled) return;
+  try {
+    await state.cloudStore.upsertOrder(order, state.store);
+    renderCloudStatus("ออนไลน์พร้อมใช้", `ซิงก์ล่าสุด ${formatTime(Date.now())}`);
+  } catch (error) {
+    renderCloudStatus("ซิงก์มีปัญหา", error.message || "อัปเดตสถานะออเดอร์ใน Supabase ไม่สำเร็จ");
+    toast("อัปเดตสถานะออนไลน์ไม่สำเร็จ");
+  }
 }
 
 function renderAll() {
@@ -538,7 +548,7 @@ function migrateStore(store) {
 
 function initCloudSync() {
   state.cloudUnsubscribe?.();
-  state.cloudStore?.stopPolling?.();
+  state.cloudStore?.stopRealtime?.();
   state.cloudStore = createCloudStore();
   renderCloudStatus("ยังไม่ได้ตั้งค่า", "ตั้งค่า VITE_SUPABASE_URL และ VITE_SUPABASE_ANON_KEY ในไฟล์ .env เพื่อเริ่มซิงก์ออนไลน์");
 
@@ -550,8 +560,13 @@ function initCloudSync() {
 
 async function connectCloudStore() {
   loadCloudStore();
-  state.cloudUnsubscribe = state.cloudStore.startPolling(handleRemoteStore, (error) => {
-    renderCloudStatus("ซิงก์มีปัญหา", error.message || "ตรวจ Supabase ไม่สำเร็จ");
+  state.cloudUnsubscribe = state.cloudStore.startRealtime({
+    onStoreChange: handleRemoteStore,
+    onOrderChange: handleRemoteOrder,
+    onIssueChange: handleRemoteIssue,
+    onError: (error) => {
+      renderCloudStatus("ซิงก์มีปัญหา", error.message || "ตรวจ Supabase ไม่สำเร็จ");
+    },
   });
 }
 
@@ -596,8 +611,7 @@ async function syncCloudNow({ force = false } = {}) {
     }
 
     renderCloudStatus("กำลังซิงก์", "กำลังบันทึกข้อมูลขึ้น Supabase");
-    const remoteStore = await state.cloudStore.load();
-    const mergedStore = remoteStore ? mergeStores(migrateStore(remoteStore), state.store) : migrateStore(state.store);
+    const mergedStore = migrateStore(state.store);
     mergedStore.updatedAt = Date.now();
     await state.cloudStore.save(mergedStore);
     state.store = migrateStore(mergedStore);
@@ -612,11 +626,74 @@ function handleRemoteStore(remoteStore, { force = false } = {}) {
   const remote = migrateStore(remoteStore);
   if (!force && (remote.updatedAt || 0) <= (state.store.updatedAt || 0)) return false;
 
+  const knownOrderIds = new Set((state.store.orders || []).map((order) => order.id));
   state.store = remote;
   saveStore({ syncCloud: false, touch: false });
   renderAll();
+  remote.orders
+    .filter((order) => !knownOrderIds.has(order.id) && order.sourceClientId !== state.clientId)
+    .forEach(notifyIncomingOrder);
   renderCloudStatus("รับข้อมูลออนไลน์แล้ว", `อัปเดตล่าสุด ${formatTime(remote.updatedAt)}`);
   return true;
+}
+
+function handleRemoteOrder(order, { eventType } = {}) {
+  if (!order?.id || order.sourceClientId === state.clientId) return false;
+  const existed = state.store.orders.some((item) => item.id === order.id);
+  const ordersById = new Map((state.store.orders || []).map((item) => [item.id, item]));
+  ordersById.set(order.id, { ...(ordersById.get(order.id) || {}), ...order });
+  state.store.orders = [...ordersById.values()].sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+  rememberProduct(order.name, order.size);
+  state.store.updatedAt = Math.max(Number(state.store.updatedAt || 0), Number(order.updatedAt || order.createdAt || Date.now()));
+  saveStore({ syncCloud: false, touch: false });
+  renderAll();
+  if (!existed && eventType === "INSERT") notifyIncomingOrder(order);
+  renderCloudStatus("รับออเดอร์ใหม่แล้ว", `อัปเดตล่าสุด ${formatTime(Date.now())}`);
+  return true;
+}
+
+function handleRemoteIssue(issue) {
+  if (!issue?.id) return false;
+  const issuesById = new Map((state.store.issues || []).map((item) => [item.id, item]));
+  issuesById.set(issue.id, { ...(issuesById.get(issue.id) || {}), ...issue });
+  state.store.issues = [...issuesById.values()].sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+  saveStore({ syncCloud: false, touch: false });
+  renderReport();
+  return true;
+}
+
+function notifyIncomingOrder(order) {
+  toast(`มีออเดอร์บดกาแฟใหม่ คิว ${order.queue || "-"}: ${order.name || ""}`);
+  playOrderAlert();
+  showOrderNotification(order);
+}
+
+function playOrderAlert() {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const context = new AudioContext();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.value = 880;
+    gain.gain.setValueAtTime(0.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.2, context.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.45);
+    oscillator.connect(gain).connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.5);
+  } catch {
+    // Some browsers block sound until the page has received a user gesture.
+  }
+}
+
+function showOrderNotification(order) {
+  if (!("Notification" in window) || Notification.permission !== "granted" || !document.hidden) return;
+  new Notification("มีออเดอร์บดกาแฟใหม่", {
+    body: `คิว ${order.queue || "-"}: ${order.name || ""}`,
+    tag: `hk-order-${order.id}`,
+  });
 }
 
 function mergeStores(remoteStore, localStore) {

@@ -80,3 +80,20 @@ create policy hk_products_public_update on public.hk_products for update to anon
 create policy hk_issues_public_select on public.hk_issues for select to anon, authenticated using (true);
 create policy hk_issues_public_insert on public.hk_issues for insert to anon, authenticated with check (true);
 create policy hk_issues_public_update on public.hk_issues for update to anon, authenticated using (true) with check (true);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'hk_orders'
+  ) then
+    alter publication supabase_realtime add table public.hk_orders;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'hk_issues'
+  ) then
+    alter publication supabase_realtime add table public.hk_issues;
+  end if;
+end $$;
