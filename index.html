@@ -76,7 +76,12 @@
 
       <section id="cashier-view" class="view">
         <div class="cashier-layout">
-          <section class="glass order-form">
+          <div class="section-tabs cashier-tabs" aria-label="เลือกรูปแบบออเดอร์">
+            <button class="section-tab active" data-order-mode="standard">ออเดอร์ทั่วไป</button>
+            <button class="section-tab" data-order-mode="blend">สั่งผสมกาแฟ</button>
+          </div>
+
+          <section id="standard-order-panel" class="glass order-form order-mode-panel active" data-order-panel="standard">
             <div class="form-head">
               <div>
                 <p>ส่งออเดอร์</p>
@@ -125,6 +130,67 @@
             </div>
 
             <button id="send-order" class="btn primary">ส่งออเดอร์</button>
+          </section>
+
+          <section id="blend-order-panel" class="glass order-form order-mode-panel hidden" data-order-panel="blend">
+            <div class="form-head">
+              <div>
+                <p>สั่งผสมกาแฟ</p>
+                <h2>เลือกกาแฟหลายตัวเพื่อทำออเดอร์ผสมเข้าห้องบด</h2>
+              </div>
+            </div>
+
+            <div class="blend-builder">
+              <label>
+                เลือกกาแฟที่จะผสม
+                <div class="blend-add-row">
+                  <select id="blend-product-select"></select>
+                  <button id="add-blend-product" class="icon-btn" type="button">เพิ่ม</button>
+                </div>
+              </label>
+              <div id="blend-list" class="blend-list"></div>
+            </div>
+
+            <div class="form-grid">
+              <label>
+                ขนาดถุง
+                <select id="blend-bag-size">
+                  <option value="200">200g</option>
+                  <option value="250">250g</option>
+                  <option value="500" selected>500g</option>
+                  <option value="custom">ใส่รายละเอียดเอง</option>
+                </select>
+              </label>
+              <label>
+                จำนวนถุง
+                <input id="blend-qty" type="number" min="1" value="1" />
+              </label>
+              <label>
+                เบอร์บด
+                <select id="blend-grind">
+                  <option value="เบอร์ 6 เครื่องชงตัวใหญ่/เครื่อง ROK">เบอร์ 6 - เครื่องชงตัวใหญ่/เครื่อง ROK</option>
+                  <option value="เบอร์ 8 เครื่องชงเล็ก">เบอร์ 8 - เครื่องชงเล็ก</option>
+                  <option value="เบอร์ 10 ดริป">เบอร์ 10 - ดริป</option>
+                  <option value="เบอร์ 12 French Press">เบอร์ 12 - French Press</option>
+                  <option value="เบอร์ 17 ถุงกรอง">เบอร์ 17 - ถุงกรอง</option>
+                  <option value="custom">ใส่เบอร์บดเอง</option>
+                </select>
+              </label>
+              <label>
+                ชื่อลูกค้า/เลขบิล
+                <input id="blend-customer" placeholder="ไม่บังคับ" />
+              </label>
+              <label id="blend-custom-grind-label" class="custom-grind hidden">
+                ใส่เบอร์บดเอง
+                <input id="blend-custom-grind" placeholder="เช่น เบอร์ 9 / บดหยาบพิเศษ" autocomplete="off" />
+              </label>
+              <label id="blend-detail-label" class="custom-grind hidden">
+                รายละเอียดขนาด/สูตรผสมเพิ่มเติม
+                <textarea id="blend-detail" placeholder="เช่น รวม 1 ถุง 500g / ตัว A 60% + ตัว B 40% / แยกถุงตามสูตร"></textarea>
+              </label>
+            </div>
+
+            <button id="send-blend-order" class="btn primary">ส่งออเดอร์ผสม</button>
           </section>
 
           <section class="glass queue-preview">

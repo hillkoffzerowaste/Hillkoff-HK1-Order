@@ -17,6 +17,7 @@ const state = {
   view: "host",
   clientId: crypto.randomUUID(),
   store: migrateStore(structuredClone(defaultStore)),
+  blendProducts: [],
   cloudStore: null,
   cloudUnsubscribe: null,
   installPrompt: null,
@@ -66,7 +67,34 @@ function bindCashier() {
   $("#product-name").addEventListener("input", syncProductFromName);
   $("#product-name").addEventListener("change", syncProductFromName);
   bindGrindInput();
+  bindOrderModeTabs();
+  bindBlendForm();
   $("#send-order").addEventListener("click", sendOrder);
+  $("#send-blend-order").addEventListener("click", sendBlendOrder);
+}
+
+function bindOrderModeTabs() {
+  $$(".cashier-tabs .section-tab").forEach((button) => {
+    button.addEventListener("click", () => {
+      const mode = button.dataset.orderMode;
+      $$(".cashier-tabs .section-tab").forEach((item) => item.classList.toggle("active", item === button));
+      $$("[data-order-panel]").forEach((panel) => panel.classList.toggle("hidden", panel.dataset.orderPanel !== mode));
+    });
+  });
+}
+
+function bindBlendForm() {
+  $("#add-blend-product").addEventListener("click", addBlendProduct);
+  $("#blend-list").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-remove-blend]");
+    if (!button) return;
+    state.blendProducts.splice(Number(button.dataset.removeBlend), 1);
+    renderBlendList();
+  });
+  $("#blend-bag-size").addEventListener("change", syncBlendDetailVisibility);
+  $("#blend-grind").addEventListener("change", syncBlendCustomGrindVisibility);
+  syncBlendDetailVisibility();
+  syncBlendCustomGrindVisibility();
 }
 
 function bindInstallApp() {
@@ -116,6 +144,18 @@ function syncCustomGrindVisibility() {
   const isCustom = $("#grind").value === "custom";
   $("#custom-grind-label").classList.toggle("hidden", !isCustom);
   if (isCustom) $("#custom-grind").focus();
+}
+
+function syncBlendDetailVisibility() {
+  const isCustom = $("#blend-bag-size").value === "custom";
+  $("#blend-detail-label").classList.toggle("hidden", !isCustom);
+  if (isCustom) $("#blend-detail").focus();
+}
+
+function syncBlendCustomGrindVisibility() {
+  const isCustom = $("#blend-grind").value === "custom";
+  $("#blend-custom-grind-label").classList.toggle("hidden", !isCustom);
+  if (isCustom) $("#blend-custom-grind").focus();
 }
 
 function bindReport() {
@@ -171,6 +211,60 @@ async function sendOrder() {
   toast("บันทึกออเดอร์เข้า Supabase แล้ว");
 }
 
+async function sendBlendOrder() {
+  const components = state.blendProducts.slice();
+  const sizeValue = $("#blend-bag-size").value;
+  const customDetail = $("#blend-detail").value.trim();
+  const size = sizeValue === "custom" ? 0 : Number(sizeValue);
+  const qty = Math.max(1, Number($("#blend-qty").value || 1));
+  const grind = selectedBlendGrind();
+  const customer = $("#blend-customer").value.trim();
+
+  if (!components.length) return toast("กรุณาเพิ่มกาแฟที่จะผสมอย่างน้อย 1 ตัว");
+  if (sizeValue === "custom" && !customDetail) return toast("กรุณาใส่รายละเอียดขนาดหรือสูตรผสม");
+  if (!grind) return toast("กรุณาเลือกหรือกรอกเบอร์บด");
+  if (!state.cloudStore?.enabled) {
+    renderCloudStatus("ฐานข้อมูลยังไม่พร้อม", "ยังเชื่อมต่อ Supabase ไม่สำเร็จ");
+    return toast("ฐานข้อมูลยังไม่พร้อม");
+  }
+
+  const blendName = `ผสม: ${components.map((item) => item.name).join(" + ")}`;
+  const order = createQueuedOrder({
+    name: blendName,
+    size,
+    qty,
+    grind,
+    customer,
+    type: "blend",
+    blendComponents: components,
+    blendDetail: customDetail,
+  });
+  saveStore();
+
+  try {
+    renderCloudStatus("กำลังบันทึกออเดอร์ผสม", "กำลังส่งออเดอร์เข้า Supabase");
+    const remoteStore = await state.cloudStore.appendOrder(order, state.store.products, state.store);
+    if (remoteStore) {
+      state.store = migrateStore(remoteStore);
+      saveStore({ touch: false });
+    }
+    renderCloudStatus("ฐานข้อมูลพร้อมใช้งาน", `บันทึกล่าสุด ${formatTime(Date.now())}`);
+  } catch (error) {
+    removeOrder(order.id);
+    toast("บันทึกฐานข้อมูลไม่สำเร็จ");
+    renderCloudStatus("ฐานข้อมูลมีปัญหา", error.message || "ส่งออเดอร์เข้า Supabase ไม่สำเร็จ");
+    return;
+  }
+
+  state.blendProducts = [];
+  $("#blend-qty").value = 1;
+  $("#blend-customer").value = "";
+  $("#blend-detail").value = "";
+  renderBlendList();
+  renderAll();
+  toast("บันทึกออเดอร์ผสมเข้า Supabase แล้ว");
+}
+
 function createQueuedOrder(orderPayload) {
   const order = {
     id: crypto.randomUUID(),
@@ -180,7 +274,7 @@ function createQueuedOrder(orderPayload) {
     sourceClientId: state.clientId,
     ...orderPayload,
   };
-  rememberProduct(order.name, order.size);
+  if (order.type !== "blend") rememberProduct(order.name, order.size);
   state.store.orders.unshift(order);
   return order;
 }
@@ -238,6 +332,22 @@ function removeIssue(id) {
 function selectedGrind() {
   if ($("#grind").value === "custom") return $("#custom-grind").value.trim();
   return $("#grind").value;
+}
+
+function selectedBlendGrind() {
+  if ($("#blend-grind").value === "custom") return $("#blend-custom-grind").value.trim();
+  return $("#blend-grind").value;
+}
+
+function addBlendProduct() {
+  const name = $("#blend-product-select").value.trim();
+  const product = findProductByName(name);
+  if (!product) return toast("กรุณาเลือกสินค้าจากรายการ");
+  if (state.blendProducts.some((item) => normalizeProductName(item.name) === normalizeProductName(product.name))) {
+    return toast("เพิ่มกาแฟตัวนี้ในสูตรผสมแล้ว");
+  }
+  state.blendProducts.push({ name: product.name, size: product.size });
+  renderBlendList();
 }
 
 function syncProductFromName() {
@@ -320,6 +430,8 @@ function renderHost() {
 
 function renderCashier() {
   renderProductSuggestions();
+  renderBlendProductOptions();
+  renderBlendList();
   const activeOrders = state.store.orders.filter((order) => order.status !== "done" && order.status !== "canceled").slice(0, 10);
   $("#cashier-queue-list").innerHTML =
     activeOrders
@@ -337,6 +449,31 @@ function renderProductSuggestions() {
     .join("");
 }
 
+function renderBlendProductOptions() {
+  const select = $("#blend-product-select");
+  if (!select) return;
+  const currentValue = select.value;
+  const products = state.store.products.slice().sort((a, b) => a.name.localeCompare(b.name, "th"));
+  select.innerHTML = products.map((product) => `<option value="${escapeHtml(product.name)}">${escapeHtml(product.name)}</option>`).join("");
+  if (products.some((product) => product.name === currentValue)) select.value = currentValue;
+}
+
+function renderBlendList() {
+  const list = $("#blend-list");
+  if (!list) return;
+  list.innerHTML =
+    state.blendProducts
+      .map(
+        (product, index) => `
+          <div class="blend-item">
+            <span>${escapeHtml(product.name)}</span>
+            <button class="icon-btn" type="button" data-remove-blend="${index}">ลบ</button>
+          </div>
+        `
+      )
+      .join("") || empty("ยังไม่ได้เพิ่มกาแฟที่จะผสม");
+}
+
 function renderReport() {
   const report = buildDailyReport($("#report-date")?.value || todayKey());
   renderReportDateLabel(report.date);
@@ -350,7 +487,7 @@ function renderReport() {
         <td>${formatTime(order.createdAt)}</td>
         <td>${escapeHtml(order.queue)}</td>
         <td>${escapeHtml(order.name)}</td>
-        <td>${order.size}g</td>
+        <td>${escapeHtml(orderSizeLabel(order))}</td>
         <td>${order.qty}</td>
         <td>${escapeHtml(order.grind)}</td>
         <td>${statusLabel(order.status)}</td>
@@ -393,12 +530,12 @@ function buildExcelHtml(report) {
       <td>${formatTime(order.createdAt)}</td>
       <td>${escapeHtml(order.queue)}</td>
       <td>${escapeHtml(order.name)}</td>
-      <td>${order.size}</td>
+      <td>${escapeHtml(orderSizeLabel(order))}</td>
       <td>${order.qty}</td>
       <td>${escapeHtml(order.grind)}</td>
       <td>${statusLabel(order.status)}</td>
       <td>${escapeHtml(order.customer || "")}</td>
-      <td>${(WAIT_MINUTES[order.size] || 2) * Number(order.qty || 1)}</td>
+      <td>${orderMinutes(order)}</td>
     </tr>
   `).join("");
   const issueRows = report.issues.map((issue) => `
@@ -447,7 +584,7 @@ function buildDailyReport(dateKey) {
     .filter((issue) => dateFromTimestamp(issue.createdAt) === dateKey)
     .sort((a, b) => a.createdAt - b.createdAt);
   const totalBags = orders.reduce((sum, order) => sum + Number(order.qty || 0), 0);
-  const totalMinutes = orders.reduce((sum, order) => sum + (WAIT_MINUTES[order.size] || 2) * Number(order.qty || 1), 0);
+  const totalMinutes = orders.reduce((sum, order) => sum + orderMinutes(order), 0);
   return { date: dateKey, orders, issues, totalBags, totalMinutes };
 }
 
@@ -460,7 +597,7 @@ function formatDailyReportText(report) {
     `แจ้งปัญหา: ${report.issues.length}`,
     "",
     ...report.orders.map((order) =>
-      `${formatTime(order.createdAt)} | คิว ${order.queue} | ${order.name} | ${order.size}g x ${order.qty} | ${order.grind} | ${statusLabel(order.status)}`
+      `${formatTime(order.createdAt)} | คิว ${order.queue} | ${order.name} | ${orderSizeLabel(order)} x ${order.qty} | ${order.grind} | ${statusLabel(order.status)}`
     ),
     "",
     "แจ้งปัญหา",
@@ -488,7 +625,7 @@ function formatDateLong(dateKey) {
 }
 
 function orderCard(order) {
-  const minutes = (WAIT_MINUTES[order.size] || 2) * order.qty;
+  const minutes = orderMinutes(order);
   const actions = {
     waiting: `
       <button class="order-action" data-id="${order.id}" data-status="grinding">เริ่มบด</button>
@@ -508,7 +645,8 @@ function orderCard(order) {
         <span>${minutes} นาที</span>
       </div>
       <h3>${escapeHtml(order.name)}</h3>
-      <p>${order.size}g x ${order.qty} ถุง / ${escapeHtml(order.grind)}</p>
+      <p>${escapeHtml(orderSizeLabel(order))} x ${order.qty} ถุง / ${escapeHtml(order.grind)}</p>
+      ${order.blendDetail ? `<p class="muted">${escapeHtml(order.blendDetail)}</p>` : ""}
       <p class="muted">${escapeHtml(order.customer || "ไม่ระบุลูกค้า")}</p>
       <div class="order-actions">${actions[order.status]}</div>
     </article>`;
@@ -517,7 +655,16 @@ function orderCard(order) {
 function totalWait() {
   return state.store.orders
     .filter((order) => order.status !== "done" && order.status !== "canceled")
-    .reduce((sum, order) => sum + (WAIT_MINUTES[order.size] || 2) * Number(order.qty || 1), 0);
+    .reduce((sum, order) => sum + orderMinutes(order), 0);
+}
+
+function orderMinutes(order) {
+  return (WAIT_MINUTES[order.size] || 2) * Number(order.qty || 1);
+}
+
+function orderSizeLabel(order) {
+  if (order.size) return `${order.size}g`;
+  return order.blendDetail || "รายละเอียดเอง";
 }
 
 function nextQueue() {
@@ -628,7 +775,7 @@ function handleRemoteOrder(order, { eventType } = {}) {
   const ordersById = new Map((state.store.orders || []).map((item) => [item.id, item]));
   ordersById.set(order.id, { ...(ordersById.get(order.id) || {}), ...order });
   state.store.orders = [...ordersById.values()].sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
-  rememberProduct(order.name, order.size);
+  if (order.type !== "blend") rememberProduct(order.name, order.size);
   state.store.updatedAt = Math.max(Number(state.store.updatedAt || 0), Number(order.updatedAt || order.createdAt || Date.now()));
   saveStore({ touch: false });
   renderAll();
@@ -658,16 +805,32 @@ function playOrderAlert() {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;
     const context = new AudioContext();
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.value = 880;
-    gain.gain.setValueAtTime(0.0001, context.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.2, context.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.45);
-    oscillator.connect(gain).connect(context.destination);
-    oscillator.start();
-    oscillator.stop(context.currentTime + 0.5);
+    const master = context.createGain();
+    const start = context.currentTime;
+    const beepDuration = 0.24;
+    const interval = 0.5;
+    const totalDuration = 5;
+
+    master.gain.value = 0.42;
+    master.connect(context.destination);
+
+    for (let offset = 0; offset < totalDuration; offset += interval) {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const beepStart = start + offset;
+      const frequency = offset % 1 === 0 ? 920 : 720;
+
+      oscillator.type = "square";
+      oscillator.frequency.setValueAtTime(frequency, beepStart);
+      gain.gain.setValueAtTime(0.0001, beepStart);
+      gain.gain.exponentialRampToValueAtTime(0.34, beepStart + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, beepStart + beepDuration);
+      oscillator.connect(gain).connect(master);
+      oscillator.start(beepStart);
+      oscillator.stop(beepStart + beepDuration + 0.04);
+    }
+
+    window.setTimeout(() => context.close?.(), Math.ceil((totalDuration + 0.4) * 1000));
   } catch {
     // Some browsers block sound until the page has received a user gesture.
   }

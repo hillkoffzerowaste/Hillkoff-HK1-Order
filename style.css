@@ -225,6 +225,7 @@ button {
 
 .cashier-tabs {
   grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .cloud-panel {
@@ -621,6 +622,49 @@ textarea:focus {
   gap: 0.95rem;
 }
 
+.blend-builder {
+  display: grid;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+
+.blend-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.55rem;
+}
+
+.blend-add-row .icon-btn {
+  min-width: 5.25rem;
+}
+
+.blend-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.blend-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, #ffffff, #f8fafd);
+}
+
+.blend-item span {
+  overflow-wrap: anywhere;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.blend-item .icon-btn {
+  min-height: 2.4rem;
+  padding-inline: 0.8rem;
+}
+
 .custom-grind {
   grid-column: 1 / -1;
 }
@@ -877,9 +921,13 @@ textarea:focus {
     top: 0.55rem;
   }
 
-  .queue-tabs,
-  .cashier-tabs {
+  .queue-tabs {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .cashier-tabs,
+  .blend-add-row {
+    grid-template-columns: 1fr;
   }
 
   .section-tab {
