@@ -144,10 +144,29 @@
               <label>
                 เลือกกาแฟที่จะผสม
                 <div class="blend-add-row">
-                  <input id="blend-product-name" list="blend-product-suggestions" placeholder="พิมพ์หรือเลือกชื่อกาแฟ" autocomplete="off" />
-                  <datalist id="blend-product-suggestions"></datalist>
-                  <input id="blend-grams" type="number" min="1" placeholder="กรัม" />
-                  <input id="blend-bags" type="number" min="1" value="1" aria-label="จำนวนถุงของกาแฟตัวนี้" />
+                  <label class="blend-field">
+                    ชื่อกาแฟ
+                    <input id="blend-product-name" list="blend-product-suggestions" placeholder="พิมพ์หรือเลือกชื่อกาแฟ" autocomplete="off" />
+                    <datalist id="blend-product-suggestions"></datalist>
+                  </label>
+                  <label class="blend-field">
+                    จำนวนกรัม
+                    <select id="blend-grams">
+                      <option value="200">200g</option>
+                      <option value="250">250g</option>
+                      <option value="500" selected>500g</option>
+                      <option value="1000">1000g</option>
+                      <option value="custom">เพิ่มเติมเอง</option>
+                    </select>
+                  </label>
+                  <label id="blend-custom-grams-label" class="blend-field hidden">
+                    กรัมเพิ่มเติม
+                    <input id="blend-custom-grams" type="number" min="1" placeholder="ใส่กรัม" />
+                  </label>
+                  <label class="blend-field">
+                    จำนวน
+                    <input id="blend-bags" type="number" min="1" value="1" />
+                  </label>
                   <button id="add-blend-product" class="icon-btn" type="button">เพิ่ม</button>
                 </div>
               </label>
@@ -158,6 +177,7 @@
               <label>
                 เบอร์บด
                 <select id="blend-grind">
+                  <option value="ไม่บด" selected>ไม่บด</option>
                   <option value="เบอร์ 6 เครื่องชงตัวใหญ่/เครื่อง ROK">เบอร์ 6 - เครื่องชงตัวใหญ่/เครื่อง ROK</option>
                   <option value="เบอร์ 8 เครื่องชงเล็ก">เบอร์ 8 - เครื่องชงเล็ก</option>
                   <option value="เบอร์ 10 ดริป">เบอร์ 10 - ดริป</option>

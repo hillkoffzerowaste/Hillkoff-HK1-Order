@@ -90,6 +90,7 @@ function bindBlendForm() {
     event.preventDefault();
     addBlendProduct();
   });
+  $("#blend-grams").addEventListener("change", syncBlendCustomGramsVisibility);
   $("#blend-list").addEventListener("click", (event) => {
     const button = event.target.closest("[data-remove-blend]");
     if (!button) return;
@@ -97,6 +98,7 @@ function bindBlendForm() {
     renderBlendList();
   });
   $("#blend-grind").addEventListener("change", syncBlendCustomGrindVisibility);
+  syncBlendCustomGramsVisibility();
   syncBlendCustomGrindVisibility();
 }
 
@@ -153,6 +155,12 @@ function syncBlendCustomGrindVisibility() {
   const isCustom = $("#blend-grind").value === "custom";
   $("#blend-custom-grind-label").classList.toggle("hidden", !isCustom);
   if (isCustom) $("#blend-custom-grind").focus();
+}
+
+function syncBlendCustomGramsVisibility() {
+  const isCustom = $("#blend-grams").value === "custom";
+  $("#blend-custom-grams-label").classList.toggle("hidden", !isCustom);
+  if (isCustom) $("#blend-custom-grams").focus();
 }
 
 function bindReport() {
@@ -254,8 +262,10 @@ async function sendBlendOrder() {
   $("#blend-customer").value = "";
   $("#blend-detail").value = "";
   $("#blend-product-name").value = "";
-  $("#blend-grams").value = "";
+  $("#blend-grams").value = "500";
+  $("#blend-custom-grams").value = "";
   $("#blend-bags").value = 1;
+  syncBlendCustomGramsVisibility();
   renderBlendList();
   renderAll();
   toast("บันทึกออเดอร์ผสมเข้า Supabase แล้ว");
@@ -337,7 +347,7 @@ function selectedBlendGrind() {
 
 function addBlendProduct() {
   const name = $("#blend-product-name").value.trim();
-  const grams = Number($("#blend-grams").value || 0);
+  const grams = selectedBlendGrams();
   const bags = Math.max(1, Number($("#blend-bags").value || 1));
   const product = findProductByName(name);
   const productName = product?.name || name;
@@ -350,9 +360,16 @@ function addBlendProduct() {
   rememberProduct(productName, product?.size || grams);
   state.blendProducts.push({ name: productName, grams, bags });
   $("#blend-product-name").value = "";
-  $("#blend-grams").value = "";
+  $("#blend-grams").value = "500";
+  $("#blend-custom-grams").value = "";
   $("#blend-bags").value = 1;
+  syncBlendCustomGramsVisibility();
   renderBlendList();
+}
+
+function selectedBlendGrams() {
+  if ($("#blend-grams").value === "custom") return Number($("#blend-custom-grams").value || 0);
+  return Number($("#blend-grams").value || 0);
 }
 
 function syncProductFromName() {

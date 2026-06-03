@@ -630,12 +630,19 @@ textarea:focus {
 
 .blend-add-row {
   display: grid;
-  grid-template-columns: minmax(12rem, 1fr) minmax(5rem, 7rem) minmax(5rem, 7rem) auto;
+  grid-template-columns: minmax(12rem, 1fr) minmax(7rem, 9rem) minmax(7rem, 9rem) minmax(5rem, 7rem) auto;
+  align-items: end;
   gap: 0.55rem;
 }
 
 .blend-add-row .icon-btn {
   min-width: 5.25rem;
+}
+
+.blend-field {
+  min-width: 0;
+  gap: 0.3rem;
+  font-size: 0.92rem;
 }
 
 .blend-list {
