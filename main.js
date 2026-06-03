@@ -1,6 +1,5 @@
-import { createCloudStore } from "./sheets-store.js";
+import { createCloudStore } from "./supabase-store.js";
 
-const SHEETS_URL_KEY = "hk1-sheets-web-app-url";
 const WAIT_MINUTES = { 200: 1, 250: 1, 500: 2, 1000: 4 };
 
 const defaultStore = {
@@ -73,20 +72,6 @@ function bindCashier() {
 
 function bindCloudControls() {
   $("#cloud-sync-now")?.addEventListener("click", () => syncCloudNow({ force: true }));
-  const sheetsUrlInput = $("#sheets-web-app-url");
-  if (sheetsUrlInput) sheetsUrlInput.value = getSheetsWebAppUrl();
-  $("#save-sheets-url")?.addEventListener("click", async () => {
-    const url = sheetsUrlInput.value.trim();
-    if (!url) {
-      localStorage.removeItem(SHEETS_URL_KEY);
-      toast("ล้าง URL Google Sheets แล้ว");
-    } else {
-      localStorage.setItem(SHEETS_URL_KEY, url);
-      toast("บันทึก URL Google Sheets แล้ว");
-    }
-    await saveCentralSheetsUrl(url);
-    initCloudSync();
-  });
 }
 
 function bindInstallApp() {
@@ -167,7 +152,7 @@ async function sendOrder() {
 
   if (state.cloudStore?.enabled) {
     try {
-      renderCloudStatus("กำลังบันทึกออเดอร์", "กำลังส่งออเดอร์เข้า Google Sheets");
+      renderCloudStatus("กำลังบันทึกออเดอร์", "กำลังส่งออเดอร์เข้า Supabase");
       const remoteStore = await state.cloudStore.appendOrder(order, state.store.products);
       if (remoteStore) {
         state.store = migrateStore(remoteStore);
@@ -176,7 +161,7 @@ async function sendOrder() {
       renderCloudStatus("ออนไลน์พร้อมใช้", `ซิงก์ล่าสุด ${formatTime(Date.now())}`);
     } catch (error) {
       toast("บันทึกออนไลน์ไม่สำเร็จ");
-      renderCloudStatus("ซิงก์มีปัญหา", error.message || "ส่งออเดอร์เข้า Google Sheets ไม่สำเร็จ");
+      renderCloudStatus("ซิงก์มีปัญหา", error.message || "ส่งออเดอร์เข้า Supabase ไม่สำเร็จ");
       return;
     }
   }
@@ -185,7 +170,7 @@ async function sendOrder() {
   $("#customer").value = "";
   $("#qty").value = 1;
   renderAll();
-  toast(state.cloudStore?.enabled ? "บันทึกออเดอร์เข้า Sheets แล้ว" : "บันทึกออเดอร์แล้ว");
+  toast(state.cloudStore?.enabled ? "บันทึกออเดอร์เข้า Supabase แล้ว" : "บันทึกออเดอร์แล้ว");
 }
 
 function createQueuedOrder(orderPayload) {
@@ -215,7 +200,7 @@ async function sendIssue() {
 
   if (state.cloudStore?.enabled) {
     try {
-      renderCloudStatus("กำลังบันทึกปัญหา", "กำลังส่งแจ้งปัญหาเข้า Google Sheets");
+      renderCloudStatus("กำลังบันทึกปัญหา", "กำลังส่งแจ้งปัญหาเข้า Supabase");
       const remoteStore = await state.cloudStore.appendIssue(issue);
       if (remoteStore) {
         state.store = migrateStore(remoteStore);
@@ -224,14 +209,14 @@ async function sendIssue() {
       renderCloudStatus("ออนไลน์พร้อมใช้", `ซิงก์ล่าสุด ${formatTime(Date.now())}`);
     } catch (error) {
       toast("บันทึกปัญหาออนไลน์ไม่สำเร็จ");
-      renderCloudStatus("ซิงก์มีปัญหา", error.message || "ส่งแจ้งปัญหาเข้า Google Sheets ไม่สำเร็จ");
+      renderCloudStatus("ซิงก์มีปัญหา", error.message || "ส่งแจ้งปัญหาเข้า Supabase ไม่สำเร็จ");
       return;
     }
   }
 
   $("#issue-message").value = "";
   renderReport();
-  toast(state.cloudStore?.enabled ? "บันทึกปัญหาเข้า Sheets แล้ว" : "บันทึกปัญหาแล้ว");
+  toast(state.cloudStore?.enabled ? "บันทึกปัญหาเข้า Supabase แล้ว" : "บันทึกปัญหาแล้ว");
 }
 
 function selectedGrind() {
@@ -554,72 +539,33 @@ function migrateStore(store) {
 function initCloudSync() {
   state.cloudUnsubscribe?.();
   state.cloudStore?.stopPolling?.();
-  state.cloudStore = createStoreFromSheetsUrl(getSheetsWebAppUrl());
-  const sheetsUrlInput = $("#sheets-web-app-url");
-  if (sheetsUrlInput) sheetsUrlInput.value = getSheetsWebAppUrl();
-  renderCloudStatus("ยังไม่ได้ตั้งค่า", "ใส่ URL Google Sheets Web App ในช่องด้านล่าง แล้วกดบันทึกเพื่อเริ่มซิงก์ออนไลน์");
+  state.cloudStore = createCloudStore();
+  renderCloudStatus("ยังไม่ได้ตั้งค่า", "ตั้งค่า VITE_SUPABASE_URL และ VITE_SUPABASE_ANON_KEY ในไฟล์ .env เพื่อเริ่มซิงก์ออนไลน์");
 
   if (!state.cloudStore.enabled) return;
 
-  renderCloudStatus("กำลังเชื่อมต่อ", "กำลังเชื่อมต่อ Google Sheets");
+  renderCloudStatus("กำลังเชื่อมต่อ", "กำลังเชื่อมต่อ Supabase");
   connectCloudStore();
 }
 
-function createStoreFromSheetsUrl(webAppUrl) {
-  return createCloudStore({
-    ...import.meta.env,
-    VITE_SHEETS_WEB_APP_URL: webAppUrl,
-  });
-}
-
 async function connectCloudStore() {
-  await refreshCentralSheetsUrl();
   loadCloudStore();
   state.cloudUnsubscribe = state.cloudStore.startPolling(handleRemoteStore, (error) => {
-    renderCloudStatus("ซิงก์มีปัญหา", error.message || "ตรวจ Google Sheets ไม่สำเร็จ");
+    renderCloudStatus("ซิงก์มีปัญหา", error.message || "ตรวจ Supabase ไม่สำเร็จ");
   });
-}
-
-async function refreshCentralSheetsUrl() {
-  if (!state.cloudStore?.enabled) return;
-  try {
-    const settings = await state.cloudStore.loadSettings();
-    const centralUrl = String(settings.webAppUrl || "").trim();
-    if (!centralUrl || centralUrl === state.cloudStore.config.webAppUrl) return;
-    localStorage.setItem(SHEETS_URL_KEY, centralUrl);
-    state.cloudStore.stopPolling?.();
-    state.cloudStore = createStoreFromSheetsUrl(centralUrl);
-    const sheetsUrlInput = $("#sheets-web-app-url");
-    if (sheetsUrlInput) sheetsUrlInput.value = centralUrl;
-    renderCloudStatus("อัปเดต URL แล้ว", "ดึง Google Sheets Web App URL ล่าสุดจาก Sheet แล้ว");
-  } catch (error) {
-    renderCloudStatus("ซิงก์มีปัญหา", error.message || "ดึง URL ล่าสุดจาก Google Sheets ไม่สำเร็จ");
-  }
-}
-
-async function saveCentralSheetsUrl(webAppUrl) {
-  const targets = [state.cloudStore, createStoreFromSheetsUrl(webAppUrl)].filter((store) => store?.enabled);
-  const uniqueTargets = [...new Map(targets.map((store) => [store.config.webAppUrl, store])).values()];
-  for (const store of uniqueTargets) {
-    try {
-      await store.saveSettings({ webAppUrl });
-    } catch {
-      // A brand-new deployment may not have the latest script yet; keep trying other known URLs.
-    }
-  }
 }
 
 async function loadCloudStore() {
   try {
-    renderCloudStatus("กำลังโหลดข้อมูล", "กำลังดึงข้อมูลล่าสุดจาก Google Sheets");
+    renderCloudStatus("กำลังโหลดข้อมูล", "กำลังดึงข้อมูลล่าสุดจาก Supabase");
     const remoteStore = await state.cloudStore.load();
     if (remoteStore) {
       handleRemoteStore(remoteStore, { force: true });
       return;
     }
-    renderCloudStatus("ออนไลน์พร้อมใช้", "ยังไม่มีข้อมูลใน Google Sheets");
+    renderCloudStatus("ออนไลน์พร้อมใช้", "ยังไม่มีข้อมูลใน Supabase");
   } catch (error) {
-    renderCloudStatus("ซิงก์มีปัญหา", error.message || "โหลดข้อมูล Google Sheets ไม่สำเร็จ");
+    renderCloudStatus("ซิงก์มีปัญหา", error.message || "โหลดข้อมูล Supabase ไม่สำเร็จ");
   }
 }
 
@@ -631,25 +577,25 @@ function scheduleCloudSave() {
 
 async function syncCloudNow({ force = false } = {}) {
   if (!state.cloudStore?.enabled) {
-    renderCloudStatus("ยังไม่ได้ตั้งค่า", "ใส่ URL Google Sheets Web App ในไฟล์ .env ก่อนใช้งานออนไลน์");
+    renderCloudStatus("ยังไม่ได้ตั้งค่า", "ตั้งค่า VITE_SUPABASE_URL และ VITE_SUPABASE_ANON_KEY ในไฟล์ .env ก่อนใช้งานออนไลน์");
     return;
   }
 
   try {
     if (force) {
-      renderCloudStatus("กำลังตรวจข้อมูล", "กำลังเทียบข้อมูลในเครื่องกับ Google Sheets");
+      renderCloudStatus("กำลังตรวจข้อมูล", "กำลังเทียบข้อมูลในเครื่องกับ Supabase");
       const remoteStore = await state.cloudStore.load();
       if (remoteStore) {
         handleRemoteStore(remoteStore, { force: true });
         return;
       }
       if (!state.store.orders.length && !state.store.products.length) {
-        renderCloudStatus("ออนไลน์พร้อมใช้", "ยังไม่มีข้อมูลใน Google Sheets");
+        renderCloudStatus("ออนไลน์พร้อมใช้", "ยังไม่มีข้อมูลใน Supabase");
         return;
       }
     }
 
-    renderCloudStatus("กำลังซิงก์", "กำลังบันทึกข้อมูลขึ้น Google Sheets");
+    renderCloudStatus("กำลังซิงก์", "กำลังบันทึกข้อมูลขึ้น Supabase");
     const remoteStore = await state.cloudStore.load();
     const mergedStore = remoteStore ? mergeStores(migrateStore(remoteStore), state.store) : migrateStore(state.store);
     mergedStore.updatedAt = Date.now();
@@ -658,7 +604,7 @@ async function syncCloudNow({ force = false } = {}) {
     saveStore({ syncCloud: false, touch: false });
     renderCloudStatus("ออนไลน์พร้อมใช้", `ซิงก์ล่าสุด ${formatTime(Date.now())}`);
   } catch (error) {
-    renderCloudStatus("ซิงก์มีปัญหา", error.message || "บันทึก Google Sheets ไม่สำเร็จ");
+    renderCloudStatus("ซิงก์มีปัญหา", error.message || "บันทึก Supabase ไม่สำเร็จ");
   }
 }
 
@@ -701,10 +647,6 @@ function renderCloudStatus(status, detail) {
   const detailEl = $("#cloud-detail");
   if (statusEl) statusEl.textContent = status;
   if (detailEl) detailEl.textContent = detail;
-}
-
-function getSheetsWebAppUrl() {
-  return localStorage.getItem(SHEETS_URL_KEY) || import.meta.env.VITE_SHEETS_WEB_APP_URL || "";
 }
 
 function empty(text) {
