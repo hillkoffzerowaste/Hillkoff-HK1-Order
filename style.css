@@ -630,7 +630,7 @@ textarea:focus {
 
 .blend-add-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(12rem, 1fr) minmax(5rem, 7rem) minmax(5rem, 7rem) auto;
   gap: 0.55rem;
 }
 
@@ -645,7 +645,7 @@ textarea:focus {
 
 .blend-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 0.65rem;
   padding: 0.7rem 0.8rem;
@@ -660,9 +660,40 @@ textarea:focus {
   line-height: 1.35;
 }
 
+.blend-item small {
+  color: var(--muted);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .blend-item .icon-btn {
   min-height: 2.4rem;
   padding-inline: 0.8rem;
+}
+
+.blend-components {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.55rem 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.blend-components li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 6px;
+  background: rgba(232, 240, 254, 0.55);
+}
+
+.blend-components span {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-weight: 800;
 }
 
 .custom-grind {
@@ -928,6 +959,19 @@ textarea:focus {
   .cashier-tabs,
   .blend-add-row {
     grid-template-columns: 1fr;
+  }
+
+  .blend-item {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .blend-item small {
+    white-space: normal;
+  }
+
+  .blend-components li {
+    display: grid;
   }
 
   .section-tab {

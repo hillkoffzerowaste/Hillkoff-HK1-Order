@@ -85,15 +85,18 @@ function bindOrderModeTabs() {
 
 function bindBlendForm() {
   $("#add-blend-product").addEventListener("click", addBlendProduct);
+  $("#blend-product-name").addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    addBlendProduct();
+  });
   $("#blend-list").addEventListener("click", (event) => {
     const button = event.target.closest("[data-remove-blend]");
     if (!button) return;
     state.blendProducts.splice(Number(button.dataset.removeBlend), 1);
     renderBlendList();
   });
-  $("#blend-bag-size").addEventListener("change", syncBlendDetailVisibility);
   $("#blend-grind").addEventListener("change", syncBlendCustomGrindVisibility);
-  syncBlendDetailVisibility();
   syncBlendCustomGrindVisibility();
 }
 
@@ -144,12 +147,6 @@ function syncCustomGrindVisibility() {
   const isCustom = $("#grind").value === "custom";
   $("#custom-grind-label").classList.toggle("hidden", !isCustom);
   if (isCustom) $("#custom-grind").focus();
-}
-
-function syncBlendDetailVisibility() {
-  const isCustom = $("#blend-bag-size").value === "custom";
-  $("#blend-detail-label").classList.toggle("hidden", !isCustom);
-  if (isCustom) $("#blend-detail").focus();
 }
 
 function syncBlendCustomGrindVisibility() {
@@ -213,15 +210,12 @@ async function sendOrder() {
 
 async function sendBlendOrder() {
   const components = state.blendProducts.slice();
-  const sizeValue = $("#blend-bag-size").value;
   const customDetail = $("#blend-detail").value.trim();
-  const size = sizeValue === "custom" ? 0 : Number(sizeValue);
-  const qty = Math.max(1, Number($("#blend-qty").value || 1));
+  const qty = blendTotalBags(components);
   const grind = selectedBlendGrind();
   const customer = $("#blend-customer").value.trim();
 
   if (!components.length) return toast("กรุณาเพิ่มกาแฟที่จะผสมอย่างน้อย 1 ตัว");
-  if (sizeValue === "custom" && !customDetail) return toast("กรุณาใส่รายละเอียดขนาดหรือสูตรผสม");
   if (!grind) return toast("กรุณาเลือกหรือกรอกเบอร์บด");
   if (!state.cloudStore?.enabled) {
     renderCloudStatus("ฐานข้อมูลยังไม่พร้อม", "ยังเชื่อมต่อ Supabase ไม่สำเร็จ");
@@ -231,7 +225,7 @@ async function sendBlendOrder() {
   const blendName = `ผสม: ${components.map((item) => item.name).join(" + ")}`;
   const order = createQueuedOrder({
     name: blendName,
-    size,
+    size: 0,
     qty,
     grind,
     customer,
@@ -257,9 +251,11 @@ async function sendBlendOrder() {
   }
 
   state.blendProducts = [];
-  $("#blend-qty").value = 1;
   $("#blend-customer").value = "";
   $("#blend-detail").value = "";
+  $("#blend-product-name").value = "";
+  $("#blend-grams").value = "";
+  $("#blend-bags").value = 1;
   renderBlendList();
   renderAll();
   toast("บันทึกออเดอร์ผสมเข้า Supabase แล้ว");
@@ -340,13 +336,22 @@ function selectedBlendGrind() {
 }
 
 function addBlendProduct() {
-  const name = $("#blend-product-select").value.trim();
+  const name = $("#blend-product-name").value.trim();
+  const grams = Number($("#blend-grams").value || 0);
+  const bags = Math.max(1, Number($("#blend-bags").value || 1));
   const product = findProductByName(name);
-  if (!product) return toast("กรุณาเลือกสินค้าจากรายการ");
-  if (state.blendProducts.some((item) => normalizeProductName(item.name) === normalizeProductName(product.name))) {
+  const productName = product?.name || name;
+  if (!productName) return toast("กรุณาพิมพ์หรือเลือกชื่อกาแฟ");
+  if (!Number.isFinite(grams) || grams <= 0) return toast("กรุณาใส่จำนวนกรัมของกาแฟตัวนี้");
+  if (!Number.isFinite(bags) || bags <= 0) return toast("กรุณาใส่จำนวนถุงของกาแฟตัวนี้");
+  if (state.blendProducts.some((item) => normalizeProductName(item.name) === normalizeProductName(productName))) {
     return toast("เพิ่มกาแฟตัวนี้ในสูตรผสมแล้ว");
   }
-  state.blendProducts.push({ name: product.name, size: product.size });
+  rememberProduct(productName, product?.size || grams);
+  state.blendProducts.push({ name: productName, grams, bags });
+  $("#blend-product-name").value = "";
+  $("#blend-grams").value = "";
+  $("#blend-bags").value = 1;
   renderBlendList();
 }
 
@@ -363,6 +368,7 @@ function rememberProduct(name, size) {
   if (index >= 0) state.store.products[index] = { ...state.store.products[index], ...product };
   else state.store.products.push(product);
   renderProductSuggestions();
+  renderBlendProductOptions();
 }
 
 function findProductByName(name) {
@@ -450,12 +456,10 @@ function renderProductSuggestions() {
 }
 
 function renderBlendProductOptions() {
-  const select = $("#blend-product-select");
-  if (!select) return;
-  const currentValue = select.value;
+  const list = $("#blend-product-suggestions");
+  if (!list) return;
   const products = state.store.products.slice().sort((a, b) => a.name.localeCompare(b.name, "th"));
-  select.innerHTML = products.map((product) => `<option value="${escapeHtml(product.name)}">${escapeHtml(product.name)}</option>`).join("");
-  if (products.some((product) => product.name === currentValue)) select.value = currentValue;
+  list.innerHTML = products.map((product) => `<option value="${escapeHtml(product.name)}"></option>`).join("");
 }
 
 function renderBlendList() {
@@ -467,6 +471,7 @@ function renderBlendList() {
         (product, index) => `
           <div class="blend-item">
             <span>${escapeHtml(product.name)}</span>
+            <small>${formatBlendComponent(product)}</small>
             <button class="icon-btn" type="button" data-remove-blend="${index}">ลบ</button>
           </div>
         `
@@ -646,6 +651,7 @@ function orderCard(order) {
       </div>
       <h3>${escapeHtml(order.name)}</h3>
       <p>${escapeHtml(orderSizeLabel(order))} x ${order.qty} ถุง / ${escapeHtml(order.grind)}</p>
+      ${renderBlendComponents(order)}
       ${order.blendDetail ? `<p class="muted">${escapeHtml(order.blendDetail)}</p>` : ""}
       <p class="muted">${escapeHtml(order.customer || "ไม่ระบุลูกค้า")}</p>
       <div class="order-actions">${actions[order.status]}</div>
@@ -659,12 +665,44 @@ function totalWait() {
 }
 
 function orderMinutes(order) {
+  if (order.type === "blend" && order.blendComponents?.length) {
+    return order.blendComponents.reduce((sum, component) => sum + componentMinutes(component), 0);
+  }
   return (WAIT_MINUTES[order.size] || 2) * Number(order.qty || 1);
 }
 
 function orderSizeLabel(order) {
+  if (order.type === "blend") return "ผสมตามรายการ";
   if (order.size) return `${order.size}g`;
   return order.blendDetail || "รายละเอียดเอง";
+}
+
+function blendTotalBags(components) {
+  return components.reduce((sum, component) => sum + Number(component.bags || 1), 0) || 1;
+}
+
+function componentMinutes(component) {
+  const grams = Number(component.grams || component.size || 500);
+  const bags = Number(component.bags || 1);
+  if (WAIT_MINUTES[grams]) return WAIT_MINUTES[grams] * bags;
+  return Math.max(1, Math.ceil(grams / 250)) * bags;
+}
+
+function formatBlendComponent(component) {
+  const grams = Number(component.grams || component.size || 0);
+  const bags = Number(component.bags || 1);
+  return `${grams || "-"}g x ${bags} ถุง`;
+}
+
+function renderBlendComponents(order) {
+  if (order.type !== "blend" || !order.blendComponents?.length) return "";
+  return `
+    <ul class="blend-components">
+      ${order.blendComponents
+        .map((component) => `<li>${escapeHtml(component.name)} <span>${escapeHtml(formatBlendComponent(component))}</span></li>`)
+        .join("")}
+    </ul>
+  `;
 }
 
 function nextQueue() {

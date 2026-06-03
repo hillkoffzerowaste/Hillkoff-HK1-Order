@@ -144,7 +144,10 @@
               <label>
                 เลือกกาแฟที่จะผสม
                 <div class="blend-add-row">
-                  <select id="blend-product-select"></select>
+                  <input id="blend-product-name" list="blend-product-suggestions" placeholder="พิมพ์หรือเลือกชื่อกาแฟ" autocomplete="off" />
+                  <datalist id="blend-product-suggestions"></datalist>
+                  <input id="blend-grams" type="number" min="1" placeholder="กรัม" />
+                  <input id="blend-bags" type="number" min="1" value="1" aria-label="จำนวนถุงของกาแฟตัวนี้" />
                   <button id="add-blend-product" class="icon-btn" type="button">เพิ่ม</button>
                 </div>
               </label>
@@ -152,19 +155,6 @@
             </div>
 
             <div class="form-grid">
-              <label>
-                ขนาดถุง
-                <select id="blend-bag-size">
-                  <option value="200">200g</option>
-                  <option value="250">250g</option>
-                  <option value="500" selected>500g</option>
-                  <option value="custom">ใส่รายละเอียดเอง</option>
-                </select>
-              </label>
-              <label>
-                จำนวนถุง
-                <input id="blend-qty" type="number" min="1" value="1" />
-              </label>
               <label>
                 เบอร์บด
                 <select id="blend-grind">
@@ -184,8 +174,8 @@
                 ใส่เบอร์บดเอง
                 <input id="blend-custom-grind" placeholder="เช่น เบอร์ 9 / บดหยาบพิเศษ" autocomplete="off" />
               </label>
-              <label id="blend-detail-label" class="custom-grind hidden">
-                รายละเอียดขนาด/สูตรผสมเพิ่มเติม
+              <label id="blend-detail-label" class="custom-grind">
+                รายละเอียดเพิ่มเติม
                 <textarea id="blend-detail" placeholder="เช่น รวม 1 ถุง 500g / ตัว A 60% + ตัว B 40% / แยกถุงตามสูตร"></textarea>
               </label>
             </div>
