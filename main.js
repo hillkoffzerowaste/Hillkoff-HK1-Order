@@ -22,6 +22,8 @@ const state = {
   cloudUnsubscribe: null,
   realtimeRetryTimer: null,
   realtimeRetryAttempt: 0,
+  cloudPollTimer: null,
+  cloudPollInFlight: false,
   installPrompt: null,
 };
 
@@ -791,6 +793,7 @@ function migrateStore(store) {
 
 function initCloudSync() {
   clearRealtimeRetry();
+  stopCloudPolling();
   state.cloudUnsubscribe?.();
   state.cloudStore?.stopRealtime?.();
   state.cloudStore = createCloudStore();
@@ -800,6 +803,7 @@ function initCloudSync() {
 
   renderCloudStatus("กำลังเชื่อมต่อ", "กำลังเชื่อมต่อข้อมูลกลาง");
   connectCloudStore();
+  startCloudPolling();
   bindConnectionLifecycle();
 }
 
@@ -853,32 +857,55 @@ function clearRealtimeRetry() {
   state.realtimeRetryTimer = null;
 }
 
+function startCloudPolling() {
+  stopCloudPolling();
+  state.cloudPollTimer = window.setInterval(() => {
+    pollCloudStore();
+  }, 4000);
+}
+
+function stopCloudPolling() {
+  if (!state.cloudPollTimer) return;
+  window.clearInterval(state.cloudPollTimer);
+  state.cloudPollTimer = null;
+}
+
+async function pollCloudStore() {
+  if (!state.cloudStore?.enabled || state.cloudPollInFlight || !navigator.onLine) return;
+  state.cloudPollInFlight = true;
+  try {
+    await loadCloudStore({ force: false, silent: true });
+  } finally {
+    state.cloudPollInFlight = false;
+  }
+}
+
 function bindConnectionLifecycle() {
   if (bindConnectionLifecycle.bound) return;
   bindConnectionLifecycle.bound = true;
   window.addEventListener("online", reconnectCloudStore);
   window.addEventListener("focus", () => {
-    if (state.cloudStore?.enabled) loadCloudStore();
+    if (state.cloudStore?.enabled) loadCloudStore({ force: false });
     reconnectCloudStore();
   });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;
-    if (state.cloudStore?.enabled) loadCloudStore();
+    if (state.cloudStore?.enabled) loadCloudStore({ force: false });
     reconnectCloudStore();
   });
 }
 
-async function loadCloudStore() {
+async function loadCloudStore({ force = true, silent = false } = {}) {
   try {
-    renderCloudStatus("กำลังโหลดข้อมูล", "กำลังอ่านข้อมูลล่าสุดจากข้อมูลกลาง");
+    if (!silent) renderCloudStatus("กำลังโหลดข้อมูล", "กำลังอ่านข้อมูลล่าสุดจากข้อมูลกลาง");
     const remoteStore = await state.cloudStore.load();
     if (remoteStore) {
-      handleRemoteStore(remoteStore, { force: true });
+      handleRemoteStore(remoteStore, { force });
       return;
     }
-    renderCloudStatus("ระบบพร้อมใช้งาน", "ยังไม่มีข้อมูลในข้อมูลกลาง");
+    if (!silent) renderCloudStatus("ระบบพร้อมใช้งาน", "ยังไม่มีข้อมูลในข้อมูลกลาง");
   } catch (error) {
-    renderCloudStatus("ระบบมีปัญหา", error.message || "โหลดข้อมูลไม่สำเร็จ");
+    if (!silent) renderCloudStatus("ระบบมีปัญหา", error.message || "โหลดข้อมูลไม่สำเร็จ");
     scheduleRealtimeReconnect();
   }
 }
