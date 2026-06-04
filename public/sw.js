@@ -32,3 +32,16 @@ self.addEventListener("fetch", (event) => {
       .catch(() => caches.match(request).then((cached) => cached || caches.match("/index.html"))),
   );
 });
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clientList) => {
+        const appClient = clientList.find((client) => new URL(client.url).origin === self.location.origin);
+        if (appClient) return appClient.focus();
+        return clients.openWindow(event.notification.data?.url || "/");
+      }),
+  );
+});

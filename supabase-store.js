@@ -83,7 +83,7 @@ export function createCloudStore(env = import.meta.env) {
     return store ? withUpdatedAt(store, updatedAt) : null;
   }
 
-  function startRealtime({ onStoreChange, onOrderChange, onIssueChange, onError } = {}) {
+  function startRealtime({ onStoreChange, onOrderChange, onIssueChange, onError, onStatus } = {}) {
     if (!enabled || channel) return () => {};
     channel = client
       .channel("hk-app-sync")
@@ -96,6 +96,7 @@ export function createCloudStore(env = import.meta.env) {
         if (issue) onIssueChange?.(issue, { eventType: payload.eventType });
       })
       .subscribe((status, error) => {
+        onStatus?.(status);
         if (error) onError?.(error);
         if (status === "CHANNEL_ERROR") onError?.(new Error("Supabase realtime channel error"));
       });
