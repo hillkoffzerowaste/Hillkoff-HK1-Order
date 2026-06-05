@@ -668,9 +668,10 @@ function formatDateLong(dateKey) {
 
 function orderCard(order) {
   const minutes = orderMinutes(order);
+  const startActionLabel = order.type === "blend" ? "เริ่มผสม/บด" : "เริ่มบด";
   const actions = {
     waiting: `
-      <button class="order-action" data-id="${order.id}" data-status="grinding">เริ่มบด</button>
+      <button class="order-action" data-id="${order.id}" data-status="grinding">${startActionLabel}</button>
       <button class="order-action danger" data-id="${order.id}" data-status="canceled">ยกเลิก</button>
     `,
     grinding: `
