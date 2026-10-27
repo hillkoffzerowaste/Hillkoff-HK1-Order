@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .vite/
+.firebase/
 .env
 .env.*
 !.env.example
