@@ -1,4 +1,5 @@
 import { createCloudStore } from "./supabase-store.js";
+import { shouldIgnoreRemoteOrder } from "./order-sync.js";
 
 const WAIT_MINUTES = { 200: 1, 250: 1, 500: 2, 1000: 4 };
 
@@ -927,7 +928,7 @@ function handleRemoteStore(remoteStore, { force = false } = {}) {
 }
 
 function handleRemoteOrder(order, { eventType } = {}) {
-  if (!order?.id || order.sourceClientId === state.clientId) return false;
+  if (shouldIgnoreRemoteOrder(order, state.clientId, eventType)) return false;
   const existed = state.store.orders.some((item) => item.id === order.id);
   const ordersById = new Map((state.store.orders || []).map((item) => [item.id, item]));
   ordersById.set(order.id, { ...(ordersById.get(order.id) || {}), ...order });
